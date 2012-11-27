@@ -10,5 +10,5 @@ Cada elemento a monitorizar tiene un daemon (moon-daemon) y habrá al menos un a
 En la configuración básica un broker controla la información enviada por los daemons bajo petición (cliente-servidor) y mantiene
 una base de datos con la información proporcionada.
 
-Cada daemon tendrá un servidor web embebido encargado de publicar la información agregada de los daemons.
+Cada broker tendrá un servidor web embebido encargado de publicar la información agregada de los daemons.
 
