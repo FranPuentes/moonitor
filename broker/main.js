@@ -16,7 +16,9 @@ var Level5=require(Path.join(CWD,'common/level5'));
 
 var conf=
     {
+     //send 'iamalive' each 'announce' seconds
      announce: 60,
+     //networks
      networks:
        [
         { name:'localnet', address:'127.0.0.1', port:1234, peer:{ port:1233, broadcast:'127.255.255.255' } },
@@ -41,11 +43,14 @@ function onListening()
 {
  this.setBroadcast(true);
  console.log('Listen@'+this.network.name);
+ //TODO: send 'iamalive' packet
+ //TODO: set interval to send announce
 }
 
 function onClose()
 {
  console.log('Close@'+this.network.name);
+ //TODO: stop announce interval
 }
 
 function onError(err)
