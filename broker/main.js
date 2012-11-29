@@ -46,6 +46,12 @@ for(var i=2; i<process.argv.length; i++)
     //TODO: procesar argumentos
    }
 
+/////////////////////////////////////////////////////////// database //////////////////////////////////////////
+
+//TODO: base de datos
+
+/////////////////////////////////////////////////////////// server ////////////////////////////////////////////
+
 function onMessage(msg,peer)
 {
  var data=Level5.get(this,peer.address,peer.port,msg);
@@ -63,9 +69,9 @@ function onListening()
       Level5.send(server,
                   server.network.peer.broadcast,
                   server.network.peer.port,
-                  { command:"iamalive", network:server.network.name });
+                  { command:"iamalive", network:server.network.name, rol:"broker" });
      }
-     
+
  console.log('Listen@'+this.network.name);
  this.setBroadcast(true);
  iamalive(this);
@@ -111,8 +117,6 @@ if(Tools.isset(conf.networks))
 
 console.log('Servers created');
 
-/////////////////////////////////////////////////////////// database //////////////////////////////////////////
-//TODO: base de datos
-
 /////////////////////////////////////////////////////////// web server ////////////////////////////////////////
+
 //TODO: servidor web
