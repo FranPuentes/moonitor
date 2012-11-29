@@ -31,7 +31,7 @@ if(Fs.existsSync(Path.join(CWD,'broker.conf.json')))
      {
       var tmp=Fs.readFileSync(Path.join(CWD,'broker.conf.json'));
       var obj=JSON.parse(tmp);
-      //TODO: integrar 'obj' en 'conf'
+      //TODO: merge 'obj' and 'conf'
      }
    catch(err)  
      {
@@ -72,7 +72,7 @@ function onListening()
                   { command:"iamalive", network:server.network.name, rol:"broker" });
      }
 
- console.log('Listen@'+this.network.name);
+ console.log('Listen@'+this.network.name+' '+this.network.address+':'+this.network.port);
  this.setBroadcast(true);
  iamalive(this);
  if(Tools.isset(this.announce) && this.announce>0)
@@ -120,3 +120,13 @@ console.log('Servers created');
 /////////////////////////////////////////////////////////// web server ////////////////////////////////////////
 
 //TODO: servidor web
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+process.on("SIGINT",
+           function()
+             {
+              console.log("Ending ...");
+              process.exit(0);
+             });

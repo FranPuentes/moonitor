@@ -70,7 +70,7 @@ function onListening()
                   { command:"iamalive", network:server.network.name, rol:"daemon" });
      }
 
- console.log('Listen@'+this.network.name);
+ console.log('Listen@'+this.network.name+' '+this.network.address+':'+this.network.port);
  this.setBroadcast(true);
  iamalive(this);
  if(Tools.isset(this.announce) && this.announce>0)
@@ -112,3 +112,11 @@ if(Tools.isset(conf.network))
 
 console.log('Servers created');
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+process.on("SIGINT",
+           function()
+             {
+              console.log("Ending ...");
+              process.exit(0);
+             });
