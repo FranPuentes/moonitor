@@ -17,10 +17,13 @@ var Level5=require(Path.join(CWD,'common/level5.js'));
 var conf=
     {
      //send 'iamalive' each 'announce' seconds (0 - disable)
-     announce: 60,
+     announce: 10,
+     //bind to this port
+     port:     1233,
      //network
-     network:
-        { name:'localnet', address:'127.0.0.1', port:1233, peer:{ port:1234, broadcast:'127.255.255.255' } },
+     network:  { name:'localnet', port:1234, broadcast:'127.255.255.255' },
+     //plugins 
+     plugins:  'plugins',
     };
 
 if(Fs.existsSync(Path.join(CWD,'daemon.conf.json')))
@@ -28,8 +31,7 @@ if(Fs.existsSync(Path.join(CWD,'daemon.conf.json')))
    try
      {
       var tmp=Fs.readFileSync(Path.join(CWD,'daemon.conf.json'));
-      var obj=JSON.parse(tmp);
-      //TODO: integrar 'obj' en 'conf'
+      conf=JSON.parse(tmp);
      }
    catch(err)  
      {
@@ -46,7 +48,25 @@ for(var i=2; i<process.argv.length; i++)
 
 /////////////////////////////////////////////////////////// plugins ///////////////////////////////////////////
 
-//TODO: plugins
+var PLUGINS=Path.resolve.(CWD,conf.plugins);
+var plugins={};
+
+if(Fs.existsSync(PLUGINS))
+  {
+   var list=Fs.readdirSync(PLUGINS);
+   for(var i in list)
+      {
+       var entry=list[i];
+       var stat=Fs.statSync(entry);
+       if(stat.isFile())
+         {
+         }
+       else
+       if(stat.isDirectory())
+         {
+         }
+      }
+  }
 
 /////////////////////////////////////////////////////////// server ////////////////////////////////////////////
 
@@ -55,7 +75,7 @@ function onMessage(msg,peer)
  var data=Level5.get(this,peer.address,peer.port,msg);
  if(Tools.isset(data))
    {
-    console.log('Message@'+this.network.name+' from '+peer.address+':'+peer.port);
+    console.log('Message from '+peer.address+':'+peer.port);
     //TODO: process 'data' :-)
    }
 }
@@ -64,18 +84,18 @@ function onListening()
 {
  var iamalive=function(server)
      {
-      Level5.send(server,
-                  server.network.peer.broadcast,
-                  server.network.peer.port,
-                  { command:"iamalive", network:server.network.name, rol:"daemon" });
+      if(Tools.isset(conf.network))
+        {
+         Level5.send(server, conf.network.broadcast, conf.network.port, { command:"iamalive", network:conf.network.name, rol:"daemon" });
+        }
      }
-
- console.log('Listen@'+this.network.name+' '+this.network.address+':'+this.network.port);
+ 
+ console.log('Now listening ...');
  this.setBroadcast(true);
  iamalive(this);
- if(Tools.isset(this.announce) && this.announce>0)
+ if(Tools.isset(conf.announce) && conf.announce>0)
    {
-    this.announceId=setInterval(iamalive,this.announce,this);
+    this.announceId=setInterval(iamalive,conf.announce*1000,this);
    }
 }
 
@@ -84,33 +104,26 @@ function onClose()
  if(Tools.isset(this.announceId))
    {
     clearInterval(this.announceId);
+    delete this.announceId;
    } 
- console.log('Close@'+this.network.name);
+ console.log('Close');
 }
 
 function onError(err)
 {
- console.log('Error@'+this.network.name+': '+err);
+ console.log('Error: '+err);
 }
 
-if(Tools.isset(conf.network))
+if(Tools.isset(conf.port))
   {
-   var network=conf.network;
-       
-   console.log('Setting up '+network.name+' ...');
    var server=Dgram.createSocket('udp4');
-   server.announce=conf.announce;
-   server.network=network;
    server.on('message',  onMessage.  bind(server));
    server.on('listening',onListening.bind(server));
    server.on('close',    onClose.    bind(server));
    server.on('error',    onError.    bind(server));
-   server.sendTo =function(peer,port,data) { Level5.send(server,peer,port,data); }
-   server.sendAll=function(     port,data) { Level5.send(server,null,port,data); }
-   server.bind(network.port,network.address);
+   server.bind(conf.port);
+   console.log('Server created');
   }
-
-console.log('Servers created');
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

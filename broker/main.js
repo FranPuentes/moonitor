@@ -18,10 +18,12 @@ var conf=
     {
      //send 'iamalive' each 'announce' seconds (0 - disable)
      announce: 60,
+     port:     1234,
      //networks
      networks:
        [
-        { name:'localnet', address:'127.0.0.1', port:1234, peer:{ port:1233, broadcast:'127.255.255.255' } },
+        { name:'localnet', broadcast:'127.255.255.255', port:1233 },
+        { name:'xxxxxnet', broadcast:'192.168.0.255',   port:1233 },
        ],
     };
 
@@ -57,7 +59,7 @@ function onMessage(msg,peer)
  var data=Level5.get(this,peer.address,peer.port,msg);
  if(Tools.isset(data))
    {
-    console.log('Message@'+this.network.name+' from '+peer.address+':'+peer.port);
+    console.log('Message from '+peer.address+':'+peer.port);
     //TODO: process 'data' :-)
    }
 }
@@ -66,18 +68,22 @@ function onListening()
 {
  var iamalive=function(server)
      {
-      Level5.send(server,
-                  server.network.peer.broadcast,
-                  server.network.peer.port,
-                  { command:"iamalive", network:server.network.name, rol:"broker" });
+      if(Tools.isset(conf.networks))
+        {
+         for(var i in conf.networks)
+            {
+             var network=conf.networks[i];
+             Level5.send(server, network.broadcast, network.port, { command:"iamalive", network:network.name, rol:"broker" });
+            }
+        }
      }
 
- console.log('Listen@'+this.network.name+' '+this.network.address+':'+this.network.port);
+ console.log('Now listening ...');
  this.setBroadcast(true);
  iamalive(this);
- if(Tools.isset(this.announce) && this.announce>0)
+ if(Tools.isset(conf.announce) && conf.announce>0)
    {
-    this.announceId=setInterval(iamalive,this.announce,this);
+    this.announceId=setInterval(iamalive,conf.announce*1000,this);
    }
 }
 
@@ -86,36 +92,26 @@ function onClose()
  if(Tools.isset(this.announceId))
    {
     clearInterval(this.announceId);
+    delete this.announceId;
    } 
- console.log('Close@'+this.network.name);
+ console.log('Close');
 }
 
 function onError(err)
 {
- console.log('Error@'+this.network.name+': '+err);
+ console.log('Error: '+err);
 }
 
-if(Tools.isset(conf.networks))
+if(Tools.isset(conf.port))
   {
-   for(var i in conf.networks)
-      {
-       var network=conf.networks[i];
-       
-       console.log('Setting up '+network.name+' ...');
-       var server=Dgram.createSocket('udp4');
-       server.announce=conf.announce;
-       server.network=network;
-       server.on('message',  onMessage.  bind(server));
-       server.on('listening',onListening.bind(server));
-       server.on('close',    onClose.    bind(server));
-       server.on('error',    onError.    bind(server));
-       server.sendTo =function(peer,port,data) { Level5.send(server,peer,port,data); }
-       server.sendAll=function(     port,data) { Level5.send(server,null,port,data); }
-       server.bind(network.port,network.address);
-      }
+   var server=Dgram.createSocket('udp4');
+   server.on('message',  onMessage.  bind(server));
+   server.on('listening',onListening.bind(server));
+   server.on('close',    onClose.    bind(server));
+   server.on('error',    onError.    bind(server));
+   server.bind(conf.port);
+   console.log('Server created');
   }
-
-console.log('Servers created');
 
 /////////////////////////////////////////////////////////// web server ////////////////////////////////////////
 
