@@ -15,7 +15,10 @@ var CWD =Path.dirname(SELF);
 var Tools =require(Path.join(CWD,'common/tools.js' ));
 var Level5=require(Path.join(CWD,'common/level5.js'));
 
+var log=console.log;
+
 //TODO: comprobar si existe un *.pid ejecutándose
+//      si es así, abandonar esta instancia
 
 //create a '*.pid' file into CWD, with our PID
 Fs.writeFileSync(Path.join(CWD,Path.basename(SELF,Path.extname(SELF))+'.pid'),process.pid,'utf8');
@@ -55,13 +58,41 @@ for(var i=2; i<process.argv.length; i++)
    }
 
 /////////////////////////////////////////////////////////// database //////////////////////////////////////////
-//
-// hosts:
-//   [*]
-//     hostname:<string>
-//     lastUpdate:<timestamp>
 
-var hosts=[];
+var objects=[];
+var relations=[];
+var properties=[];
+
+function insertOrUpdate(table,keys,data)
+{
+ for(var i=0; i<table.length; i++)
+    {
+     var row=table[i];
+     
+     var all=true;
+     for(var key in keys)
+        {
+         if(!Tools.isset(row[key]) || row[key]!==keys[key]) { all=false; break; }
+        }
+        
+     if(all===true)
+       {
+        for(var key in data) row[key]=data[key];
+        row.updated=new Date();
+        log("UPDATE: "+Util.inspect(row));
+        return i;
+       }
+    }
+
+ var id=table.length;
+ var row={};
+ for(var key in keys) row[key]=keys[key];
+ for(var key in data) row[key]=data[key];
+ row.updated=new Date();
+ log("INSERT: "+Util.inspect(row));
+ table[id]=row;
+ return id;
+}
 
 /////////////////////////////////////////////////////////// server ////////////////////////////////////////////
 
@@ -100,38 +131,25 @@ function onMessage(msg,peer)
        //
        // recibimos un 'ping' desde 'who' en el papel de 'rol'
        //
-       if(Tools.isset(network))
+       if(Tools.isset(network) && rol==='daemon')
          {
-          if(data.rol==='daemon')
-            {
-             Level5.send(this,peer.address,peer.port, { command:"pong", network:data.network, rol:'broker', who:Os.hostname(), from:data.who });
-            } 
+          Level5.send(this,peer.address,peer.port, { command:"pong", network:data.network, rol:'broker', who:Os.hostname(), from:data.who });
          }
       }
     else  
     if(data.command==='pong')
-      {// command:'pong', network:<name>, rol:'daemon', who:<name>, from:<name>
+      {// command:'pong', network:<name>, rol:'daemon', who:<name>, from:<name===Os.hostname()>
        //
-       // recibimos un 'pong' desde 'who' en el papel de 'rol' y reclamado por 'who'
+       // recibimos un 'pong' desde 'who' en el papel de 'rol' y reclamado por 'from'
        //
-       if(Tools.isset(network) && data.who===Os.hostname())
+       if(Tools.isset(network) && data.rol==='daemon' && data.from===Os.hostname())
          {
-          var hostname=data.who;
+          var nid=insertOrUpdate(objects,{type:'network',name:data.network},{});
+          var hid=insertOrUpdate(objects,{type:'host',   name:data.who},    {});
           
-          for(var i=0; i<hosts.length; i++)
-             {
-              var host=hosts[i];
-              if(Tools.isset(host) && Tools.isset(host.hostname) && host.hostname===hostname)
-                {
-                 host.lastUpdate=new Date();
-                 return;
-                }
-             }
-             
-          hosts.push({ 
-                      hostname:hostname, 
-                      lastUpdate:(new Date()) 
-                     });
+          insertOrUpdate(relations,{left:nid,right:hid,type:'contains'},{});
+          insertOrUpdate(properties,{object:hid,property:'address'},{value:peer.address});
+          insertOrUpdate(properties,{object:hid,property:'port'},{value:peer.port});
          }
       }
    }

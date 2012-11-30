@@ -5,6 +5,7 @@
 var Util =require('util');
 var Path =require('path');
 var Fs   =require('fs');
+var Os   =require('os');
 var Dgram=require('dgram');
 
 var NODE=process.argv[0];
@@ -13,6 +14,14 @@ var CWD =Path.dirname(SELF);
 
 var Tools =require(Path.join(CWD,'common/tools.js' ));
 var Level5=require(Path.join(CWD,'common/level5.js'));
+
+//TODO: comprobar si existe un *.pid ejecutándose
+//      si es así, abandonar esta instancia
+
+//create a '*.pid' file into CWD, with our PID
+Fs.writeFileSync(Path.join(CWD,Path.basename(SELF,Path.extname(SELF))+'.pid'),process.pid,'utf8');
+//'ps' will report this name
+process.title="moon-daemon";
 
 var conf=
     {
@@ -71,18 +80,64 @@ if(Fs.existsSync(PLUGINS))
 /////////////////////////////////////////////////////////// server ////////////////////////////////////////////
 //
 // commands:
+//   iamalive
 //   ping
 //   list
 //   get
 //   do
 //
+
+var broker={ address:undefined, port:undefined, lastUpdate:undefined };
+
 function onMessage(msg,peer)
 {
  var data=Level5.get(this,peer.address,peer.port,msg);
  if(Tools.isset(data))
    {
-    console.log('Message from '+peer.address+':'+peer.port);
-    //TODO: process 'data' :-)
+    console.log(data);
+    var network;
+
+    if(Tools.isset(data.network))
+      {
+       if(data.network === conf.network.name)
+         {
+          network=conf.network;
+         }
+      }
+
+    if(data.command==='iamalive')
+      {// command:'iamalive', network:<name>, rol:'broker'
+       if(Tools.isset(network) && data.rol==='broker')
+         {
+          broker.address=peer.address;
+          broker.port=peer.port;
+          broker.lastUpdate=new Date();
+         }
+      }
+    else     
+    if(data.command==='ping')
+      {// command:'ping', network:<name>, rol:'broker', who:<name>
+       //
+       // recibimos un 'ping' desde 'who' en el papel de 'rol'
+       //
+       if(Tools.isset(network) && data.rol==='broker')
+         {
+          Level5.send(this,peer.address,peer.port, { command:"pong", network:data.network, rol:'daemon', who:Os.hostname(), from:data.who });
+         }
+      }
+    else  
+    if(data.command==='pong')
+      {// command:'pong', network:<name>, rol:'broker', who:<name>, from:<name===Os.hostname()>
+       //
+       // recibimos un 'pong' desde 'who' en el papel de 'rol' y reclamado por 'from'
+       //
+       if(Tools.isset(network) && data.rol==='broker' && data.from===Os.hostname())
+         {
+          broker.address=peer.address;
+          broker.port=peer.port;
+          broker.lastUpdate=new Date();
+         }
+      }
    }
 }
 
