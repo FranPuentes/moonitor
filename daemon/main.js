@@ -22,8 +22,8 @@ var conf=
      port:     1233,
      //network
      network:  { name:'localnet', port:1234, broadcast:'127.255.255.255' },
-     //plugins 
-     plugins:  'plugins',
+     //plugins directory
+     plugins:  './plugins',
     };
 
 if(Fs.existsSync(Path.join(CWD,'daemon.conf.json')))
@@ -69,7 +69,13 @@ if(Fs.existsSync(PLUGINS))
   }
 
 /////////////////////////////////////////////////////////// server ////////////////////////////////////////////
-
+//
+// commands:
+//   ping
+//   list
+//   get
+//   do
+//
 function onMessage(msg,peer)
 {
  var data=Level5.get(this,peer.address,peer.port,msg);

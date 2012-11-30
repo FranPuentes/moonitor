@@ -23,7 +23,6 @@ var conf=
      networks:
        [
         { name:'localnet', broadcast:'127.255.255.255', port:1233 },
-        { name:'xxxxxnet', broadcast:'192.168.0.255',   port:1233 },
        ],
     };
 
@@ -32,8 +31,7 @@ if(Fs.existsSync(Path.join(CWD,'broker.conf.json')))
    try
      {
       var tmp=Fs.readFileSync(Path.join(CWD,'broker.conf.json'));
-      var obj=JSON.parse(tmp);
-      //TODO: merge 'obj' and 'conf'
+      var conf=JSON.parse(tmp);
      }
    catch(err)  
      {
@@ -116,7 +114,6 @@ if(Tools.isset(conf.port))
 /////////////////////////////////////////////////////////// web server ////////////////////////////////////////
 
 //TODO: servidor web
-
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
