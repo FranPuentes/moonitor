@@ -47,8 +47,8 @@ for(var i=2; i<process.argv.length; i++)
    }
 
 /////////////////////////////////////////////////////////// plugins ///////////////////////////////////////////
-
-var PLUGINS=Path.resolve.(CWD,conf.plugins);
+/*
+var PLUGINS=Path.resolve(CWD,conf.plugins);
 var plugins={};
 
 if(Fs.existsSync(PLUGINS))
@@ -67,7 +67,7 @@ if(Fs.existsSync(PLUGINS))
          }
       }
   }
-
+*/
 /////////////////////////////////////////////////////////// server ////////////////////////////////////////////
 //
 // commands:
