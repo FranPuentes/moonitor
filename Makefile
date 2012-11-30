@@ -13,5 +13,6 @@ tgz:
 	tar czvf moon-daemon.tgz daemon moon-daemon.js common plugins
 
 push: tgz commit
-	git push
+	git push https://github.com/FranPuentes/moonitor.git
+
 
