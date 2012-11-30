@@ -150,6 +150,35 @@ function onMessage(msg,peer)
           insertOrUpdate(relations,{left:nid,right:hid,type:'contains'},{});
           insertOrUpdate(properties,{object:hid,property:'address'},{value:peer.address});
           insertOrUpdate(properties,{object:hid,property:'port'},{value:peer.port});
+
+          Level5.send(this,peer.address,peer.port, { command:"status",  network:data.network, repeat:60 });
+          Level5.send(this,peer.address,peer.port, { command:"plugins", network:data.network            });
+         }
+      }
+    else  
+    if(data.command==='status')
+      {// command:'status', network:<name>, who:<name>, status:{ ... }
+       //
+       if(Tools.isset(network))
+         {
+          var nid=insertOrUpdate(objects,{type:'network',name:data.network},{});
+          var hid=insertOrUpdate(objects,{type:'host',   name:data.who},    {});
+          
+          if(Tools.isset(data.status))
+            {
+             for(var key in data.status)
+                {
+                 insertOrUpdate(properties,{object:hid,property:key},{value:data.status[key]});
+                }
+            } 
+         }
+      }
+    else  
+    if(data.command==='plugins')
+      {// command:'plugins', network:<name>, plugins:[ { name:<string>, description:<text> ... } ... ]
+       //
+       if(Tools.isset(network))
+         {
          }
       }
    }
