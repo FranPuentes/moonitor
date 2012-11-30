@@ -26,3 +26,6 @@ daemon/*	Código fuente del daemon
 plugins/*	Plugins del daemon
 
 Makefile	Auntomatización de varias cosas
+
+moon-broker.tgz	Broker package
+moon-daemon.tgz	Daemon package
