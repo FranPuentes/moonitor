@@ -51,6 +51,7 @@ process.on('exit',
            function()
            {
             console.log("Ending ...");
+            removeInterval('iamalive');
             Fs.unlinkSync(PID);
            });
 
@@ -108,7 +109,7 @@ for(var i=2; i<process.argv.length; i++)
 // commands:
 //   iamalive *
 //   ping/pong *
-//   plugins
+//   plugins *
 //   get
 //   do
 //
@@ -130,23 +131,25 @@ function removeInterval(key)
 function installInterval(key,repeat,times,callback/*...*/)
 {
  removeInterval(key);
+ /*
  intervals[key]=setInterval(function(args)
                             {
-                             times-=1;
                              if(times>0) callback.apply(this,args);
                              else        removeInterval(key);
+                             times-=1;
                             },
                             repeat*1000,
                             arguments.slice(4));
-
+ */                           
 }
 
 function onMessage(msg,peer)
 {
  var data=Level5.get(this,peer.address,peer.port,msg);
  if(Tools.isset(data))
+ try
    {
-    console.log(data);
+    //console.log(data);
     var network;
 
     if(Tools.isset(data.network))
@@ -205,6 +208,7 @@ function onMessage(msg,peer)
              var plugins=[];
              var PLUGINS=Path.resolve(conf.plugins);
              var entries=Fs.readdirSync(PLUGINS);
+             
              for(var i in entries)
                 {
                  var short=entries[i];
@@ -257,14 +261,80 @@ function onMessage(msg,peer)
       }
     else
     if(data.command==='get')
-      {// => command:'get', network:<name>, plugin:<name>, what:[name] [,repeat:<seconds>] [,times:<integer>]
-       // <= command:'get', network:<name>, plugin:<name>, what:<value>, who:<hostname>
+      {// => command:'get',  network:<name>, plugin:<name>, what:<name> [,repeat:<seconds>] [,times:<integer>]
+       // <= command:'get',  network:<name>, plugin:<name>, what:<name>, value:<value>, who:<hostname>
+       // <= command:'error',network:<name>, who:<hostname>, description:<text>, data:<data>
+       //
+       if(Tools.isset(network) && peer.address===broker.address && peer.port===broker.port)
+         {
+          function doCommand(server,script,what)
+            {
+             var plugin=require(script);
+             
+             if(Tools.isset(plugin.get))
+               {
+                Level5.send(server,broker.address,broker.port, { command:"get", network:data.network, who:Os.hostname(), plugin:data.plugin, what:what, value:plugin.get(what) });
+               }
+             else
+             throw new Error("unknow plugin command");
+            }
+            
+          var PLUGINS =Path.resolve(conf.plugins);
+          var fullname=Path.join(PLUGINS,data.plugin);
+          
+          if(Fs.existsSync(fullname))
+            {
+             script=Path.join(fullname,'main.js');
+             doCommand(this,script,data.what);
+             if(Tools.isset(data.repeat) && data.repeat>0)
+               {
+                var repeat=data.repeat;
+                var times=(Tools.isset(data.times)?data.times:0);
+                installInterval('get::'+data.plugin+'::'+data.what,repeat,times,doCommand,this,script,data.what);
+               }
+            }
+          else
+            {
+             script=fullname+'.js';
+             if(Fs.existsSync(script))
+               {
+                doCommand(this,script,data.what);
+                if(Tools.isset(data.repeat) && data.repeat>0)
+                  {
+                   var repeat=data.repeat;
+                   var times=(Tools.isset(data.times)?data.times:0);
+                   installInterval('do::'+data.plugin+'::'+data.what,repeat,times,doCommand,this,script,data.what);
+                  }
+               }
+             else
+             throw new Error("unknow plugin");
+            }
+         }
+      }
+    else
+    if(data.command==='set')
+      {// => command:'set',  network:<name>, plugin:<name>, what:<name>, value:<value>, ack:true|false
+       // <= command:'set',  network:<name>, plugin:<name>, what:<name>,                ack:true|false
+       // <= command:'error',network:<name>, who:<hostname>, description:<text>, data:<data>
        //
        if(Tools.isset(network) && peer.address===broker.address && peer.port===broker.port)
          {
          }
       }
-    ///////////////////////////////////////////////////////////////////////////////////////////////      
+    else
+    if(data.command==='do')
+      {// => command:'do', network:<name>, plugin:<name>, what:<name>, action:<value>, ack:true|false
+       // <= command:'do', network:<name>, plugin:<name>, what:<name>,                 ack:true|false
+       //
+       if(Tools.isset(network) && peer.address===broker.address && peer.port===broker.port)
+         {
+         }
+      }
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+   }
+ catch(err)
+   {
+    Level5.send(this,peer.address,peer.port, { command:"error", network:conf.network.name, who:Os.hostname(), description:err, data:data });
    }
 }
 
@@ -283,17 +353,13 @@ function onListening()
  iamalive(this);
  if(Tools.isset(conf.announce) && conf.announce>0)
    {
-    this.announceId=setInterval(iamalive,conf.announce*1000,this);
+    installInterval('iamalive',conf.announce,null,iamalive,this);
    }
 }
 
 function onClose()
 {
- if(Tools.isset(this.announceId))
-   {
-    clearInterval(this.announceId);
-    delete this.announceId;
-   } 
+ removeInterval('iamalive');
  console.log('Close');
 }
 

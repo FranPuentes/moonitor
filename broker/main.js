@@ -95,7 +95,7 @@ var conf=
      http:
        {
         bind:{ address:'127.0.0.1', port:8080 },
-        pages:{ static:'web/static', nonstatic:'web/nonstatic' },
+        pages:{ static:'web/static', nonstatic:'web/dynamic' },
        }
      */  
     };
@@ -212,7 +212,7 @@ function onMessage(msg,peer)
             }
           else
             {
-             var hId=updateOrInsertRow(objects,{type:'host',name:data.who},{address:peer.address,port:peer.port});
+             var hId=updateRow(objects,{type:'host',name:data.who},{address:peer.address,port:peer.port});
              updateOrInsertRow(relations,{left:nId,right:hId,type:'contains'},{});
             }
          }
@@ -254,9 +254,25 @@ function onMessage(msg,peer)
               for(var deliver in plugin.delivers)
                  {
                   insertRow(relations,{left:hId,right:pId,type:'deliver'},{ name:deliver, options:plugin.delivers[deliver]});
+                  //TO TEST:
+                  //Level5.send(this,peer.address,peer.port, { command:"get", network:data.network, plugin:plugin.name, what:deliver });
                  }
              }
          }
+      }
+    else  
+    if(data.command==='get')
+      {// => command:'get', network:<name>, who:<hostname>, plugin:<name>, what:<name>, value:<value>
+       //
+       if(Tools.isset(nId))
+         {
+          console.log("response GET::"+data.plugin+"@"+data.who+" => "+data.what+" = "+Util.inspect(data.value,false,1));
+         }
+      }
+    else
+      {
+       console.log("Unknow data:");
+       console.log(Util.inspect(data,false,1));
       }
    }
 }
