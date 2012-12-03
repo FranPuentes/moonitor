@@ -93,7 +93,7 @@ if(Fs.existsSync(CONF))
      }
    catch(err)  
      {
-      console.log("Error: "+err);
+      console.err("Error: "+err);
       process.exit(1);
      }
   }
@@ -110,7 +110,8 @@ for(var i=2; i<process.argv.length; i++)
 //   iamalive *
 //   ping/pong *
 //   plugins *
-//   get
+//   get *
+//   set
 //   do
 //
 
@@ -131,16 +132,23 @@ function removeInterval(key)
 function installInterval(key,repeat,times,callback/*...*/)
 {
  removeInterval(key);
- /*
- intervals[key]=setInterval(function(args)
-                            {
-                             if(times>0) callback.apply(this,args);
-                             else        removeInterval(key);
-                             times-=1;
-                            },
-                            repeat*1000,
-                            arguments.slice(4));
- */                           
+ if(repeat>0)
+   {
+    var args=[].slice.call(arguments,4);
+    intervals[key]=setInterval(function(args)
+                                 {
+                                  if(times===null) callback.apply(this,args);
+                                  else
+                                  if((typeof times)==='number')
+                                    {
+                                     if(times>0) callback.apply(this,args);
+                                     else        removeInterval(key);
+                                     times-=1;
+                                    }
+                                 },
+                               repeat*1000,
+                               args);
+   }
 }
 
 function onMessage(msg,peer)
@@ -149,7 +157,6 @@ function onMessage(msg,peer)
  if(Tools.isset(data))
  try
    {
-    //console.log(data);
     var network;
 
     if(Tools.isset(data.network))
@@ -365,7 +372,7 @@ function onClose()
 
 function onError(err)
 {
- console.log('Error: '+err);
+ console.err('Error: '+err);
 }
 
 if(Tools.isset(conf.port))

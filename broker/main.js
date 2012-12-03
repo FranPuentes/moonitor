@@ -91,13 +91,12 @@ var conf=
        [
         { name:'localnet', broadcast:'127.255.255.255', port:1233 },
        ],
-     /* disabled, for the time being
+       
      http:
        {
-        bind:{ address:'127.0.0.1', port:8080 },
+        bind: { address:'127.0.0.1', port:8086 },
         pages:{ static:'web/static', nonstatic:'web/dynamic' },
        }
-     */  
     };
 
 if(Fs.existsSync(CONF))
@@ -187,6 +186,31 @@ function updateOrInsertRow(table,keys,data)
  else                return insertRow(table,keys,data);
 }
 
+function retrieveRow(table,id)
+{
+ return table[id];
+}
+
+function retrieveRows(table,keys)
+{
+ var rows=[];
+ 
+ for(var i=0; i<table.length; i++)
+    {
+     var row=table[i];
+
+     var all=true;
+     for(var key in keys)
+        {
+         if(!Tools.isset(row[key]) || row[key]!==keys[key]) { all=false; break; }
+        }
+
+     if(all===true) rows[i]=row;
+    }
+    
+ return (rows.length>0?rows:null);
+}
+
 /////////////////////////////////////////////////////////// server ////////////////////////////////////////////
 
 for(var i=0; i<conf.networks.length; i++)
@@ -241,6 +265,7 @@ function onMessage(msg,peer)
     else  
     if(data.command==='plugins')
       {// => command:'plugins', network:<name>, who:<hostname>, plugins:[ { name:<string>, description:<text>, delivers:[...] } ... ]
+       //
        if(Tools.isset(nId))
          {
           var hId=updateOrInsertRow(objects,{type:'host',name:data.who},{address:peer.address,port:peer.port});
@@ -253,7 +278,7 @@ function onMessage(msg,peer)
               
               for(var deliver in plugin.delivers)
                  {
-                  insertRow(relations,{left:hId,right:pId,type:'deliver'},{ name:deliver, options:plugin.delivers[deliver]});
+                  insertRow(relations,{left:hId,right:pId,type:'deliver'},{name:deliver, options:plugin.delivers[deliver]});
                   //TO TEST:
                   //Level5.send(this,peer.address,peer.port, { command:"get", network:data.network, plugin:plugin.name, what:deliver });
                  }
@@ -266,13 +291,47 @@ function onMessage(msg,peer)
        //
        if(Tools.isset(nId))
          {
-          console.log("response GET::"+data.plugin+"@"+data.who+" => "+data.what+" = "+Util.inspect(data.value,false,1));
+          var hId=searchRow(objects,{type:'host',  name:data.who   });
+          var pId=searchRow(objects,{type:'plugin',name:data.plugin});
+
+          if(Tools.isset(hId) && Tools.isset(pId))
+            {
+             var rId=searchRow(relations,{type:'deliver',left:hId,right:pId,name:data.what});
+             if(Tools.isset(rId))
+               {
+                var row=retrieveRow(relations,rId);
+                row.value=data.value;
+                row.updated=new Date();
+                //console.log("response GET::"+data.plugin+"@"+data.who+" => "+data.what+" = "+Util.inspect(data.value,false,1));
+               }
+            }
+         }
+      }
+    else
+    if(data.command==='set')
+      {// => command:'set',  network:<name>, plugin:<name>, what:<name>, ack:true|false
+       //
+       if(Tools.isset(nId))
+         {
+          //TODO ...
+         }
+      }
+    else
+    if(data.command==='do')
+      {// => command:'do', network:<name>, plugin:<name>, what:<name>, ack:true|false
+       //
+       if(Tools.isset(nId))
+         {
+          //TODO ...
          }
       }
     else
       {
-       console.log("Unknow data:");
-       console.log(Util.inspect(data,false,1));
+       if(Tools.isset(nId))
+         {
+          console.log("Unknow paquet:");
+          console.log(Util.inspect(data,false,1));
+         }
       }
    }
 }
@@ -288,7 +347,7 @@ function onListening()
              var network=conf.networks[i];
              Level5.send(server, network.broadcast, network.port, { command:"iamalive", network:network.name, who:Os.hostname(), rol:"broker" });
             }
-        }
+       }
      }
 
  console.log('Now listening ...');
@@ -330,6 +389,22 @@ if(Tools.isset(conf.port))
 function webRequest(request,response)
 {
  //TODO: mostrar lo que haya ante cualquier petición
+ var echo=response.write;
+
+ response.statusCode=200;
+ 
+ echo("<!DOCTYPE html>");
+ echo("<html>");
+ echo("<head>");
+ echo("<meta charset='utf-8'/>");
+ echo("<title></title>");
+ echo("</head>");
+ echo("<body>");
+ echo("qwerty");
+ echo("</body>");
+ echo("</html>");
+ 
+ response.end();
 }
 
 if(Tools.isset(conf.http))
