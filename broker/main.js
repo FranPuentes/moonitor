@@ -79,7 +79,7 @@ process.on('SIGUSR2',
 
 process.title="moonitor::broker";
 
-//TODO: crear el script KILL que mata elegantemente esta instancia
+//TODO: crear el script KILL que mata limpiamente esta instancia
 
 var conf=
     {
@@ -91,11 +91,13 @@ var conf=
        [
         { name:'localnet', broadcast:'127.255.255.255', port:1233 },
        ],
+     /* disabled, for the time being
      http:
        {
         bind:{ address:'127.0.0.1', port:8080 },
         pages:{ static:'web/static', nonstatic:'web/nonstatic' },
        }
+     */  
     };
 
 if(Fs.existsSync(CONF))
@@ -119,100 +121,99 @@ for(var i=2; i<process.argv.length; i++)
    }
 
 /////////////////////////////////////////////////////////// database //////////////////////////////////////////
+// graph oriented database
+//
+// objects::
+//   id: { ... }
+//
+// relations::
+//   id: { left, right, type, ... }
+//
+//   relations are from the left to the right and with a type
+//   left and right are pointers (id) to objects
+//
 
-var objects=[];
+var objects  =[];
 var relations=[];
-var properties=[];
 
-function insertOrUpdate(table,keys,data)
+function searchRow(table,keys,from)
 {
- for(var i=0; i<table.length; i++)
+ for(var i=(Tools.isset(from)?from+1:0); i<table.length; i++)
     {
      var row=table[i];
-     
+
      var all=true;
      for(var key in keys)
         {
          if(!Tools.isset(row[key]) || row[key]!==keys[key]) { all=false; break; }
         }
         
-     if(all===true)
-       {
-        for(var key in data) row[key]=data[key];
-        row.updated=new Date();
-        log("UPDATE: "+Util.inspect(row));
-        return i;
-       }
+     if(all===true) return i;
     }
+}
 
+function insertRow(table,keys,data)
+{
  var id=table.length;
  var row={};
  for(var key in keys) row[key]=keys[key];
  for(var key in data) row[key]=data[key];
  row.updated=new Date();
- log("INSERT: "+Util.inspect(row));
+ log("INSERT: "+Util.inspect(row,false,1));
  table[id]=row;
  return id;
 }
 
-function existsKey(table,keys)
+
+function updateRow(table,keys,data)
 {
- for(var i=0; i<table.length; i++)
-    {
-     var row=table[i];
+ var id=searchRow(table,keys);
+ 
+ if(Tools.isset(id))
+   {
+    var row=table[id];
+    for(var key in data) row[key]=data[key];
+    row.updated=new Date();
+    log("UPDATE: "+Util.inspect(row,false,1));
+    return id;
+   }
+}
 
-     var all=true;
-     for(var key in keys)
-        {
-         if(!Tools.isset(row[key]) || row[key]!==keys[key]) { all=false; break; }
-        }
-
-     if(all===true) return i;
-    }
- return 0;
+function updateOrInsertRow(table,keys,data)
+{
+ var id=updateRow(table,keys,data);
+ 
+ if(Tools.isset(id)) return id;
+ else                return insertRow(table,keys,data);
 }
 
 /////////////////////////////////////////////////////////// server ////////////////////////////////////////////
+
+for(var i=0; i<conf.networks.length; i++)
+   {
+    insertRow(objects,{type:"network",name:conf.networks[i].name},{});
+   }
 
 function onMessage(msg,peer)
 {
  var data=Level5.get(this,peer.address,peer.port,msg);
  if(Tools.isset(data))
    {
-    var network;
-    
-    if(Tools.isset(data.network))
-      {
-       for(var i=0; i<conf.networks.length; i++)
-          {
-           if(data.network === conf.networks[i].name)
-             {
-              network=conf.networks[i];
-              break;
-             }
-          }
-      }
+    var nId=updateRow(objects,{type:"network",name:data.network},{});
     
     if(data.command==='iamalive')
       {// command:'iamalive', network:<name>, who:<hostname>, rol:'daemon'
        //
-       if(Tools.isset(network))
+       if(Tools.isset(nId) && data.rol==='daemon')
          {
-          if(data.rol==='daemon')
+          if(!searchRow(objects,{type:'host',name:data.who}))
             {
-             if(!existsKey(objects,{type:'host',name:data.who}))
-               {
-                Level5.send(this,peer.address,peer.port, { command:"ping", network:data.network, rol:"broker", who:Os.hostname() });
-               }
-             else
-               {
-                var nid=insertOrUpdate(objects,{type:'network',name:data.network},{});
-                var hid=insertOrUpdate(objects,{type:'host',   name:data.who},    {});
-
-                insertOrUpdate(relations,{left:nid,right:hid,type:'contains'},{});
-                insertOrUpdate(properties,{object:hid,property:'address'},{value:peer.address});
-                insertOrUpdate(properties,{object:hid,property:'port'},{value:peer.port});
-               }
+             Level5.send(this,peer.address,peer.port, { command:"ping", network:data.network, rol:"broker", who:Os.hostname() });
+            }
+          else
+            {
+             var hId=updateOrInsertRow(objects,{type:'host',name:data.who},{address:peer.address,port:peer.port});
+             updateOrInsertRow(relations,{left:nId,right:hId,type:'contains'},{});
             }
          }
       }
@@ -220,23 +221,19 @@ function onMessage(msg,peer)
     if(data.command==='ping')
       {// command:'ping', network:<name>, rol:'daemon', who:<name>
        //
-       if(Tools.isset(network) && rol==='daemon')
+       if(Tools.isset(nId) && rol==='daemon')
          {
           Level5.send(this,peer.address,peer.port, { command:"pong", network:data.network, rol:"broker", who:Os.hostname(), from:data.who });
          }
       }
-    else  
+    else
     if(data.command==='pong')
       {// command:'pong', network:<name>, rol:'daemon', who:<name>, from:<name===Os.hostname()>
        //
-       if(Tools.isset(network) && data.rol==='daemon' && data.from===Os.hostname())
+       if(Tools.isset(nId) && data.rol==='daemon' && data.from===Os.hostname())
          {
-          var nid=insertOrUpdate(objects,{type:'network',name:data.network},{});
-          var hid=insertOrUpdate(objects,{type:'host',   name:data.who},    {});
-          
-          insertOrUpdate(relations,{left:nid,right:hid,type:'contains'},{});
-          insertOrUpdate(properties,{object:hid,property:'address'},{value:peer.address});
-          insertOrUpdate(properties,{object:hid,property:'port'},{value:peer.port});
+          var hId=updateOrInsertRow(objects,{type:'host',name:data.who},{address:peer.address,port:peer.port});
+          updateOrInsertRow(relations,{left:nId,right:hId,type:'contains'},{});
 
           Level5.send(this,peer.address,peer.port, { command:"plugins", network:data.network  });
          }
@@ -244,28 +241,21 @@ function onMessage(msg,peer)
     else  
     if(data.command==='plugins')
       {// => command:'plugins', network:<name>, who:<hostname>, plugins:[ { name:<string>, description:<text>, delivers:[...] } ... ]
-       if(Tools.isset(network))
+       if(Tools.isset(nId))
          {
-          var nid=insertOrUpdate(objects,{type:'network',name:data.network},{});
-          var hid=insertOrUpdate(objects,{type:'host',   name:data.who},    {});
-
-          insertOrUpdate(relations,{left:nid,right:hid,type:'contains'},{});
-          insertOrUpdate(properties,{object:hid,property:'address'},{value:peer.address});
-          insertOrUpdate(properties,{object:hid,property:'port'},{value:peer.port});
-
+          var hId=updateOrInsertRow(objects,{type:'host',name:data.who},{address:peer.address,port:peer.port});
+          updateOrInsertRow(relations,{left:nId,right:hId,type:'contains'},{});
+          
           for(var i in data.plugins)
              {
               var plugin=data.plugins[i];
-              var pid=insertOrUpdate(objects,{type:'plugin',name:plugin.name+'@'+data.who},{});
-              insertOrUpdate(relations,{left:hid,right:pid,type:'contains'},{description:plugin.description});
-              for(var key in plugin.delivers)
+              var pId=updateOrInsertRow(objects,{type:'plugin',name:plugin.name},{description:plugin.description});
+              
+              for(var deliver in plugin.delivers)
                  {
-                  var deliver=plugin.delivers[key];
-                  insertOrUpdate(properties,{object:pid,property:key},{deliver:deliver,value:null});
+                  insertRow(relations,{left:hId,right:pId,type:'deliver'},{ name:deliver, options:plugin.delivers[deliver]});
                  }
              }
-
-          //console.log(Util.inspect(data));
          }
       }
    }
