@@ -41,3 +41,17 @@ Install daemon
 5. Create a **moon-daemon.conf** (json) to put the environment, read the code by the time being.
 6. See **moon-daemon.log** to see what is happend into the client.
 
+Copyright
+---------
+
+(c) is Francisco Puentes, 2012
+
+Support of **node**, **node-daemon**, **jquery**, **jquery-ui** copyrights is allowed.
+
+License
+-------
+
+For the time being I choose GNU lesser GPL for this work.
+
+Consult licenses of **node**, **node-daemon**, **jquery**, **jquery-ui**.
+
