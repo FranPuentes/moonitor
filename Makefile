@@ -9,8 +9,8 @@ commit: clean
 	git commit -a
 
 tgz:
-	tar czvf moon-broker.tgz broker moon-broker.js common modules
-	tar czvf moon-daemon.tgz daemon moon-daemon.js common plugins
+	tar czvf moon-broker.tgz broker moon-broker.js common modules deps web
+	tar czvf moon-daemon.tgz daemon moon-daemon.js common plugins deps
 
 push: tgz commit
 	git push https://github.com/FranPuentes/moonitor.git

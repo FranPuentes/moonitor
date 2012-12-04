@@ -13,13 +13,110 @@ var NODE=process.argv[0];
 var SELF=Path.resolve(process.argv[1]);
 var CWD =Path.dirname(SELF);
 var PID =Path.join(CWD,Path.basename(SELF,Path.extname(SELF))+'.pid');
-var KILL=Path.join(CWD,Path.basename(SELF,Path.extname(SELF))+'.kill');
 var CONF=Path.join(CWD,Path.basename(SELF,Path.extname(SELF))+'.conf');
+var LOG =Path.join(CWD,Path.basename(SELF,Path.extname(SELF))+'.log');
 
-var Tools =require(Path.join(CWD,'common/tools.js' ));
-var Level5=require(Path.join(CWD,'common/level5.js'));
+var Tools   =require(Path.join(CWD,'common/tools.js' ));
+var Level5  =require(Path.join(CWD,'common/level5.js'));
+var Demonize=require(Path.join(CWD,"common/demonize"));
 
-var log=console.log;
+function printUsageAndExit(code)
+{
+ console.err("USAGE: "+process.argv[0]+" "+process.argv[1]+" [start|stop|status]");
+ process.exit(code);
+}
+
+function existsOldInstance()
+{
+ try
+   {
+    var oldPid=parseInt(Fs.readFileSync(PID),10);
+    process.kill(oldPid,'SIGUSR2');
+    return oldPid;
+   }
+ catch(err)
+   {
+   }
+ return 0;
+}
+
+if(process.argv.length===3)
+  {
+   switch(process.argv[2])
+         {
+          case 'status':
+               if(existsOldInstance())
+                 {
+                  console.log("There are other instance of me working hard :-)");
+                  process.exit(1);
+                 }
+               else
+                 {
+                  console.log("Moon-broker is down");
+                  process.exit(0);
+                 }
+               
+          case 'stop':
+               if(Fs.existsSync(PID))
+                 {
+                  try
+                    {
+                     var oldPid=parseInt(Fs.readFileSync(PID),10);
+                     try
+                       {
+                        process.kill(oldPid,'SIGINT');
+                        console.log("Signal sent to "+oldPid);
+                       }
+                     catch(err)
+                       {
+                        console.log("Process "+oldPid+" is down");
+                       }
+                    }
+                  catch(err)
+                    {
+                     console.err(err);
+                     console.err("Failed to load and parse '"+PID+"'");
+                     process.exit(1);
+                    }
+                 }
+               process.exit(0);
+               
+          case 'start':
+               /*start the daemon -> follow*/
+               break;
+               
+          default:
+               printUsageAndExit(1);
+         }
+  }
+else
+if(process.argv.length>3)
+  {
+   printUsageAndExit(1);
+  }  
+  
+//////// DEAMON ///////////////////////////////////////////////////////////////////////////////////////////////
+
+var dPID=Demonize.start();
+Demonize.lock(PID);
+Demonize.closeIO();
+
+function LOG()
+{
+ try
+   {
+    var text="";
+    for(var i in arguments)
+       {
+        text+=arguments[i].toString()+"\n";
+       } 
+    Fs.appendFile(LOG,text,'utf8');
+   }
+ catch(err)  
+   {
+    Fs.appendFile(LOG,"ERROR: "+err);
+   }
+}
 
 if(Fs.existsSync(PID))
   {
@@ -29,7 +126,7 @@ if(Fs.existsSync(PID))
       try
         {
          process.kill(oldPid,'SIGUSR2');
-         console.log("There are other instance of me working hard :-)");
+         LOG("There are other instance of me working hard :-)");
          process.exit(0);
         }
       catch(err)
@@ -45,21 +142,19 @@ if(Fs.existsSync(PID))
      }
   }
 
-Fs.writeFileSync(PID,process.pid,'utf8');
-
 process.on('exit',
            function()
            {
-            console.log("Ending ...");
+            LOG("Ending ...");
             if(Tools.isset(server))
               {
                server.close();
-               console.log("Link closed");
+               LOG("Link closed");
               }
             if(Tools.isset(http))
               {
                http.close();
-               console.log("Http closed");
+               LOG("Http closed");
               } 
             Fs.unlinkSync(PID);
            });
@@ -67,19 +162,17 @@ process.on('exit',
 process.on('SIGINT',
            function()
            {
-            console.log("INT signal!");
+            LOG("INT signal!");
             process.exit(0);
            });
 
 process.on('SIGUSR2',
            function()
            {
-            console.log("USR2 signal!");
+            LOG("USR2 signal!");
            });
 
 process.title="moonitor::broker";
-
-//TODO: crear el script KILL que mata limpiamente esta instancia
 
 var conf=
     {
@@ -108,16 +201,10 @@ if(Fs.existsSync(CONF))
      }
    catch(err)  
      {
-      console.log("Error: "+err);
+      LOG("Error: "+err);
       process.exit(1);
      }
   }
-
-for(var i=2; i<process.argv.length; i++)
-   {
-    var arg=process.argv[i];
-    //TODO: procesar argumentos
-   }
 
 /////////////////////////////////////////////////////////// database //////////////////////////////////////////
 // graph oriented database
@@ -158,7 +245,7 @@ function insertRow(table,keys,data)
  for(var key in keys) row[key]=keys[key];
  for(var key in data) row[key]=data[key];
  row.updated=new Date();
- log("INSERT: "+Util.inspect(row,false,1));
+ LOG("INSERT: "+Util.inspect(row,false,1));
  table[id]=row;
  return id;
 }
@@ -173,7 +260,7 @@ function updateRow(table,keys,data)
     var row=table[id];
     for(var key in data) row[key]=data[key];
     row.updated=new Date();
-    log("UPDATE: "+Util.inspect(row,false,1));
+    LOG("UPDATE: "+Util.inspect(row,false,1));
     return id;
    }
 }
@@ -302,7 +389,7 @@ function onMessage(msg,peer)
                 var row=retrieveRow(relations,rId);
                 row.value=data.value;
                 row.updated=new Date();
-                //console.log("response GET::"+data.plugin+"@"+data.who+" => "+data.what+" = "+Util.inspect(data.value,false,1));
+                //LOG("response GET::"+data.plugin+"@"+data.who+" => "+data.what+" = "+Util.inspect(data.value,false,1));
                }
             }
          }
@@ -329,8 +416,8 @@ function onMessage(msg,peer)
       {
        if(Tools.isset(nId))
          {
-          console.log("Unknow paquet:");
-          console.log(Util.inspect(data,false,1));
+          LOG("Unknow paquet:");
+          LOG(Util.inspect(data,false,1));
          }
       }
    }
@@ -350,7 +437,7 @@ function onListening()
        }
      }
 
- console.log('Now listening ...');
+ LOG('Now listening ...');
  this.setBroadcast(true);
  iamalive(this);
  if(Tools.isset(conf.announce) && conf.announce>0)
@@ -366,12 +453,12 @@ function onClose()
     clearInterval(this.announceId);
     delete this.announceId;
    } 
- console.log('Close');
+ LOG('Close');
 }
 
 function onError(err)
 {
- console.log('Error: '+err);
+ LOG('Error: '+err);
 }
 
 if(Tools.isset(conf.port))
@@ -382,7 +469,7 @@ if(Tools.isset(conf.port))
    server.on('close',    onClose.    bind(server));
    server.on('error',    onError.    bind(server));
    server.bind(conf.port);
-   console.log('Server created');
+   LOG('Server created');
   }
 
 /////////////////////////////////////////////////////////// web server ////////////////////////////////////////
@@ -417,7 +504,7 @@ if(Tools.isset(conf.http))
    http.on('close',function(){});
    
    http.listen(conf.http.bind.port,conf.http.bind.address);
-   console.log("HTTP listen on port "+conf.http.bind.port);
+   LOG("HTTP listen on port "+conf.http.bind.port);
   }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
