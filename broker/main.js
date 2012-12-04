@@ -16,9 +16,9 @@ var PID =Path.join(CWD,Path.basename(SELF,Path.extname(SELF))+'.pid');
 var CONF=Path.join(CWD,Path.basename(SELF,Path.extname(SELF))+'.conf');
 var LOG =Path.join(CWD,Path.basename(SELF,Path.extname(SELF))+'.log');
 
-var Tools   =require(Path.join(CWD,'common/tools.js' ));
-var Level5  =require(Path.join(CWD,'common/level5.js'));
-var Demonize=require(Path.join(CWD,"common/demonize"));
+var Tools   =require(Path.join(CWD,"common/tools.js" ));
+var Level5  =require(Path.join(CWD,"common/level5.js"));
+var Demonize=require(Path.join(CWD,"common/demonize" ));
 
 if(process.argv.length>=2)
   {
@@ -116,19 +116,24 @@ function log()
        {
         text+=arguments[i].toString()+"\n";
        } 
-    Fs.appendFile(LOG,text,'utf8');
+    Fs.appendFileSync(LOG,text,'utf8');
    }
  catch(err)  
    {
-    Fs.appendFile(LOG,"ERROR: "+err);
+    Fs.appendFileSync(LOG,"ERROR: "+err);
    }
 }
+
+log("----- broker -----------------------------------------------------------------------");
+
+log("BROKER BASICS:"+Util.inspect({ NODE:NODE, SELF:SELF, CWD :CWD, PID :PID, CONF:CONF, LOG :LOG, }));
 
 process.on('exit',
            function()
            {
-            log("Ending ...");
+            log("Removing '"+PID+"' ...");
             Fs.unlinkSync(PID);
+            log("Exit!");
            });
 
 process.on('SIGINT',
@@ -137,10 +142,12 @@ process.on('SIGINT',
             log("INT signal!");
             if(Tools.isset(server))
               {
+               log("Closing network link ...");
                server.close();
               }
             if(Tools.isset(http))
               {
+               log("Closing HTTP link ...");
                http.close();
               } 
            });
@@ -151,12 +158,21 @@ process.on('SIGUSR2',
             log("USR2 signal!");
            });
 
+process.on('uncaughtException',
+           function(err)
+           {
+            log('Exception: '+err);
+           });
+
 if(Fs.existsSync(CONF))
   {
    try
      {
+      log("Reading *.conf file: "+CONF);
       var tmp=Fs.readFileSync(CONF);
       var conf=JSON.parse(tmp);
+      log("New configuration environment");
+      log(Util.inspect(conf));
      }
    catch(err)  
      {
@@ -204,11 +220,10 @@ function insertRow(table,keys,data)
  for(var key in keys) row[key]=keys[key];
  for(var key in data) row[key]=data[key];
  row.updated=new Date();
- log("INSERT: "+Util.inspect(row,false,1));
+ //log("INSERT: "+Util.inspect(row,false,1));
  table[id]=row;
  return id;
 }
-
 
 function updateRow(table,keys,data)
 {
@@ -219,7 +234,7 @@ function updateRow(table,keys,data)
     var row=table[id];
     for(var key in data) row[key]=data[key];
     row.updated=new Date();
-    log("UPDATE: "+Util.inspect(row,false,1));
+    //log("UPDATE: "+Util.inspect(row,false,1));
     return id;
    }
 }
@@ -257,7 +272,7 @@ function retrieveRows(table,keys)
  return (rows.length>0?rows:null);
 }
 
-/////////////////////////////////////////////////////////// server ////////////////////////////////////////////
+/////////////////////////////////////////////////////////// network link //////////////////////////////////////
 
 for(var i=0; i<conf.networks.length; i++)
    {
@@ -270,6 +285,8 @@ function onMessage(msg,peer)
  if(Tools.isset(data))
    {
     var nId=updateRow(objects,{type:"network",name:data.network},{});
+
+    //log("BROKER: New message "+Util.inspect(data,false,1,''));
     
     if(data.command==='iamalive')
       {// command:'iamalive', network:<name>, who:<hostname>, rol:'daemon'
@@ -324,9 +341,12 @@ function onMessage(msg,peer)
               
               for(var deliver in plugin.delivers)
                  {
-                  insertRow(relations,{left:hId,right:pId,type:'deliver'},{name:deliver, options:plugin.delivers[deliver]});
-                  //TO TEST:
-                  //Level5.send(this,peer.address,peer.port, { command:"get", network:data.network, plugin:plugin.name, what:deliver });
+                  var options=plugin.delivers[deliver];
+                  insertRow(relations,{left:hId,right:pId,type:'deliver'},{name:deliver, options:options});
+                  if(Tools.isset(options.static) && options.static===true)
+                    {
+                     Level5.send(this,peer.address,peer.port, { command:"get", network:data.network, plugin:plugin.name, what:deliver });
+                    } 
                  }
              }
          }
@@ -434,11 +454,9 @@ if(Tools.isset(conf.port))
 /////////////////////////////////////////////////////////// web server ////////////////////////////////////////
 function webRequest(request,response)
 {
- //TODO: mostrar lo que haya ante cualquier petición
- var echo=response.write;
+ var echo=response.write.bind(response);
 
- response.statusCode=200;
- 
+ response.writeHead(200,{'Content-Type':'text/html'});
  echo("<!DOCTYPE html>");
  echo("<html>");
  echo("<head>");
@@ -446,22 +464,48 @@ function webRequest(request,response)
  echo("<title></title>");
  echo("</head>");
  echo("<body>");
- echo("qwerty");
+ echo("  <table>");
+ for(var id in objects)
+    {
+     var object=objects[id];
+     
+     echo("<tr>");
+     echo("<td>");
+     echo("<b>"+object.type+"</b>");
+     echo("</td>");
+     echo("<td colspan='2'>");
+     echo("<i>"+object.name+"</i>");
+     echo("</td>");
+     echo("</tr>");
+
+     for(key in object)
+        {
+         if(key!=='type' && key!=='name')
+           {
+            echo("<tr>");
+            echo("<td>");
+            echo("&nbsp;");
+            echo("</td>");
+            echo("<td>");
+            echo(key);
+            echo("</td>");
+            echo("<td>");
+            echo(Util.inspect(object[key]));
+            echo("</td>");
+            echo("</tr>");
+           }
+        }
+    }
+ echo("  </table>");
  echo("</body>");
  echo("</html>");
- 
  response.end();
 }
 
-if(Tools.isset(conf.http))
+if(Tools.isset(conf.http) && Tools.isset(conf.http.bind))
   {
-   var http=require('http').createServer();
-
-   http.on('',function(){});
-
-   http.on('request',webRequest);
-   http.on('close',function(){ log("HTTP server closed"); });
-   
+   var http=require('http').createServer(webRequest);
+   http.on('close',function(){ log("HTTP server closed"); });  
    http.listen(conf.http.bind.port,conf.http.bind.address);
    log("HTTP listen on port "+conf.http.bind.port);
   }

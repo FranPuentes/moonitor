@@ -5,7 +5,6 @@ function commandGet(what)
  switch(what)
        {
         case 'CWD':            return process.cwd();
-        case 'Environment':    return process.env;
         case 'Versions':       return process.versions;
         case 'Config':         return process.config;
         case 'PID':            return process.pid;
@@ -33,7 +32,6 @@ module.exports=
         description: "Estado general del sistema",
         delivers: {
                    'CWD':            { static:false, },
-                   'Environment':    { static:false, },
                    'Versions':       { static:true,  },
                    'Config':         { static:true,  },
                    'PID':            { static:false, },

@@ -110,19 +110,23 @@ function log()
        {
         text+=arguments[i].toString()+"\n";
        } 
-    Fs.appendFile(LOG,text,'utf8');
+    Fs.appendFileSync(LOG,text,'utf8');
    }
  catch(err)
    {
-    Fs.appendFile(LOG,"ERROR: "+err);
+    Fs.appendFileSync(LOG,"ERROR: "+err);
    }
 }   
                                                        
+log("----- daemon -----------------------------------------------------------------------");
+
+log("DAEMON BASICS:"+Util.inspect({ NODE:NODE, SELF:SELF, CWD :CWD, PID :PID, CONF:CONF, LOG :LOG, }));
+
 process.on('exit',
            function()
            {
-            console.log("Ending ...");
             removeInterval('iamalive');
+            console.log("Ending ...");
             Fs.unlinkSync(PID);
            });
 
@@ -137,6 +141,12 @@ process.on('SIGUSR2',
            function()
            {
             console.log("USR2 signal!");
+           });
+
+process.on('uncaughtException',
+           function(err)
+           {
+            log('Exception: '+err);
            });
 
 
@@ -217,6 +227,8 @@ function onMessage(msg,peer)
          }
       }
 
+    //log("DAEMON: New message "+Util.inspect(data,false,1,''));
+    
     if(data.command==='iamalive')
       {// command:'iamalive', network:<name>, who:<hostname>, rol:'broker'
        //
@@ -263,7 +275,7 @@ function onMessage(msg,peer)
           function plugins(server)
             {
              var plugins=[];
-             var PLUGINS=Path.resolve(conf.plugins);
+             var PLUGINS=Path.resolve(CWD,conf.plugins);
              var entries=Fs.readdirSync(PLUGINS);
              
              for(var i in entries)
@@ -336,7 +348,7 @@ function onMessage(msg,peer)
              throw new Error("unknow plugin command");
             }
             
-          var PLUGINS =Path.resolve(conf.plugins);
+          var PLUGINS =Path.resolve(CWD,conf.plugins);
           var fullname=Path.join(PLUGINS,data.plugin);
           
           if(Fs.existsSync(fullname))

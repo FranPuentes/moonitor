@@ -1,10 +1,9 @@
 
 pull:
 	git pull
-	(cd deps/daemon.node-master && node-waf configure build)
+	(cd deps/daemon.node-master && node-waf clean configure build)
 
 clean:
-	rm -rf deps/daemon.node-master/build
 	find . -name \*~ -delete
 	rm -f *.log
 	rm -f *.pid
@@ -17,6 +16,5 @@ commit:
 	git commit -a
 
 push: clean tgz commit
+	git rm deps/daemon.node-master/build/*
 	git push https://github.com/FranPuentes/moonitor.git
-
-
