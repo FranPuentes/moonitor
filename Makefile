@@ -16,5 +16,4 @@ commit:
 	git commit -a
 
 push: clean tgz commit
-	git rm -fr deps/daemon.node-master/build/*
 	git push https://github.com/FranPuentes/moonitor.git
