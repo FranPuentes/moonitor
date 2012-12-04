@@ -46,7 +46,7 @@ Copyright
 
 (c) is Francisco Puentes, 2012
 
-Support of **node**, **node-daemon**, **jquery**, **jquery-ui** copyrights is allowed.
+Support of **node**, **node-daemon**, **jquery**, **jquery-ui** copyright are allowed.
 
 License
 -------
