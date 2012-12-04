@@ -1,6 +1,8 @@
 
 clean:
 	find . -name \*~ -delete
+	rm -f *.log
+	rm -f *.pid
 
 pull:
 	git pull

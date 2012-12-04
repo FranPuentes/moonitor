@@ -20,34 +20,17 @@ var Tools   =require(Path.join(CWD,'common/tools.js' ));
 var Level5  =require(Path.join(CWD,'common/level5.js'));
 var Demonize=require(Path.join(CWD,"common/demonize"));
 
-function printUsageAndExit(code)
-{
- console.err("USAGE: "+process.argv[0]+" "+process.argv[1]+" [start|stop|status]");
- process.exit(code);
-}
-
-function existsOldInstance()
-{
- try
-   {
-    var oldPid=parseInt(Fs.readFileSync(PID),10);
-    process.kill(oldPid,'SIGUSR2');
-    return oldPid;
-   }
- catch(err)
-   {
-   }
- return 0;
-}
-
-if(process.argv.length===3)
+if(process.argv.length>=2)
   {
    switch(process.argv[2])
          {
+          case 'help':
+               Tools.printUsageAndExit(0);
+               
           case 'status':
-               if(existsOldInstance())
+               if(Tools.existsOldInstance(PID))
                  {
-                  console.log("There are other instance of me working hard :-)");
+                  console.log("There are other instance of moon-broker working hard");
                   process.exit(1);
                  }
                else
@@ -57,123 +40,52 @@ if(process.argv.length===3)
                  }
                
           case 'stop':
-               if(Fs.existsSync(PID))
-                 {
-                  try
-                    {
-                     var oldPid=parseInt(Fs.readFileSync(PID),10);
-                     try
-                       {
-                        process.kill(oldPid,'SIGINT');
-                        console.log("Signal sent to "+oldPid);
-                       }
-                     catch(err)
-                       {
-                        console.log("Process "+oldPid+" is down");
-                       }
-                    }
-                  catch(err)
-                    {
-                     console.err(err);
-                     console.err("Failed to load and parse '"+PID+"'");
-                     process.exit(1);
-                    }
-                 }
+               Tools.killOldInstance(PID);
                process.exit(0);
                
           case 'start':
-               /*start the daemon -> follow*/
+               //parameters:
+               //  --conf <file>
+               //  --nolog
+               //
+               for(var i=3; i<process.argv.length; i++)
+                  {
+                   var arg=process.argv[i];
+                   
+                   if(arg==='--nolog')
+                     {
+                      LOG=undefined;
+                     }
+                   else
+                   if(arg==='--conf' && (i+1)<process.argv.length)
+                     {
+                      i+=1;
+                      CONF=process.argv[i];
+                     }
+                   else
+                   Tools.printUsageAndExit(1);
+                  }
+               if(Tools.existsOldInstance(PID))
+                 {
+                  console.log("The are other instance of moon-broker working");
+                  Tools.printUsageAndExit(0);
+                 }
+               //following, the broker daemon ...
                break;
                
           default:
-               printUsageAndExit(1);
+               Tools.printUsageAndExit(1);
          }
   }
-else
-if(process.argv.length>3)
-  {
-   printUsageAndExit(1);
-  }  
+
+console.log("Starting the broker daemon ...");
   
 //////// DEAMON ///////////////////////////////////////////////////////////////////////////////////////////////
-
 var dPID=Demonize.start();
 Demonize.lock(PID);
 Demonize.closeIO();
 
-function LOG()
-{
- try
-   {
-    var text="";
-    for(var i in arguments)
-       {
-        text+=arguments[i].toString()+"\n";
-       } 
-    Fs.appendFile(LOG,text,'utf8');
-   }
- catch(err)  
-   {
-    Fs.appendFile(LOG,"ERROR: "+err);
-   }
-}
-
-if(Fs.existsSync(PID))
-  {
-   try
-     {
-      var oldPid=parseInt(Fs.readFileSync(PID),10);
-      try
-        {
-         process.kill(oldPid,'SIGUSR2');
-         LOG("There are other instance of me working hard :-)");
-         process.exit(0);
-        }
-      catch(err)
-        {
-         Fs.unlinkSync(PID);
-        }
-     }
-   catch(err)
-     {
-      console.err(err);
-      console.err("Failed to load and parse '"+PID+"'");
-      process.exit(1);
-     }
-  }
-
-process.on('exit',
-           function()
-           {
-            LOG("Ending ...");
-            if(Tools.isset(server))
-              {
-               server.close();
-               LOG("Link closed");
-              }
-            if(Tools.isset(http))
-              {
-               http.close();
-               LOG("Http closed");
-              } 
-            Fs.unlinkSync(PID);
-           });
-
-process.on('SIGINT',
-           function()
-           {
-            LOG("INT signal!");
-            process.exit(0);
-           });
-
-process.on('SIGUSR2',
-           function()
-           {
-            LOG("USR2 signal!");
-           });
-
-process.title="moonitor::broker";
-
+//////// default conf data ///////////////////////////////////
 var conf=
     {
      //send 'iamalive' each 'announce' seconds (0 - disable)
@@ -192,6 +104,53 @@ var conf=
        }
     };
 
+process.title="moon::broker";
+
+function log()
+{
+ if(Tools.isset(LOG))
+ try
+   {
+    var text="";
+    for(var i in arguments)
+       {
+        text+=arguments[i].toString()+"\n";
+       } 
+    Fs.appendFile(LOG,text,'utf8');
+   }
+ catch(err)  
+   {
+    Fs.appendFile(LOG,"ERROR: "+err);
+   }
+}
+
+process.on('exit',
+           function()
+           {
+            log("Ending ...");
+            Fs.unlinkSync(PID);
+           });
+
+process.on('SIGINT',
+           function()
+           {
+            log("INT signal!");
+            if(Tools.isset(server))
+              {
+               server.close();
+              }
+            if(Tools.isset(http))
+              {
+               http.close();
+              } 
+           });
+
+process.on('SIGUSR2',
+           function()
+           {
+            log("USR2 signal!");
+           });
+
 if(Fs.existsSync(CONF))
   {
    try
@@ -201,7 +160,7 @@ if(Fs.existsSync(CONF))
      }
    catch(err)  
      {
-      LOG("Error: "+err);
+      log("Error: "+err);
       process.exit(1);
      }
   }
@@ -210,10 +169,10 @@ if(Fs.existsSync(CONF))
 // graph oriented database
 //
 // objects::
-//   id: { ... }
+//   id: { type, name, ... }
 //
 // relations::
-//   id: { left, right, type, ... }
+//   id: { type, left, right, ... }
 //
 //   relations are from the left to the right and with a type
 //   left and right are pointers (id) to objects
@@ -245,7 +204,7 @@ function insertRow(table,keys,data)
  for(var key in keys) row[key]=keys[key];
  for(var key in data) row[key]=data[key];
  row.updated=new Date();
- LOG("INSERT: "+Util.inspect(row,false,1));
+ log("INSERT: "+Util.inspect(row,false,1));
  table[id]=row;
  return id;
 }
@@ -260,7 +219,7 @@ function updateRow(table,keys,data)
     var row=table[id];
     for(var key in data) row[key]=data[key];
     row.updated=new Date();
-    LOG("UPDATE: "+Util.inspect(row,false,1));
+    log("UPDATE: "+Util.inspect(row,false,1));
     return id;
    }
 }
@@ -389,7 +348,7 @@ function onMessage(msg,peer)
                 var row=retrieveRow(relations,rId);
                 row.value=data.value;
                 row.updated=new Date();
-                //LOG("response GET::"+data.plugin+"@"+data.who+" => "+data.what+" = "+Util.inspect(data.value,false,1));
+                //log("response GET::"+data.plugin+"@"+data.who+" => "+data.what+" = "+Util.inspect(data.value,false,1));
                }
             }
          }
@@ -416,8 +375,8 @@ function onMessage(msg,peer)
       {
        if(Tools.isset(nId))
          {
-          LOG("Unknow paquet:");
-          LOG(Util.inspect(data,false,1));
+          log("Unknow paquet:");
+          log(Util.inspect(data,false,1));
          }
       }
    }
@@ -437,7 +396,7 @@ function onListening()
        }
      }
 
- LOG('Now listening ...');
+ log('UDP listening ...');
  this.setBroadcast(true);
  iamalive(this);
  if(Tools.isset(conf.announce) && conf.announce>0)
@@ -452,13 +411,13 @@ function onClose()
    {
     clearInterval(this.announceId);
     delete this.announceId;
-   } 
- LOG('Close');
+   }
+ log("UDP server closed");  
 }
 
 function onError(err)
 {
- LOG('Error: '+err);
+ log('Error: '+err);
 }
 
 if(Tools.isset(conf.port))
@@ -469,7 +428,7 @@ if(Tools.isset(conf.port))
    server.on('close',    onClose.    bind(server));
    server.on('error',    onError.    bind(server));
    server.bind(conf.port);
-   LOG('Server created');
+   log('Server created');
   }
 
 /////////////////////////////////////////////////////////// web server ////////////////////////////////////////
@@ -501,10 +460,10 @@ if(Tools.isset(conf.http))
    http.on('',function(){});
 
    http.on('request',webRequest);
-   http.on('close',function(){});
+   http.on('close',function(){ log("HTTP server closed"); });
    
    http.listen(conf.http.bind.port,conf.http.bind.address);
-   LOG("HTTP listen on port "+conf.http.bind.port);
+   log("HTTP listen on port "+conf.http.bind.port);
   }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
