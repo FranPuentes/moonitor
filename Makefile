@@ -1,7 +1,7 @@
 
 pull:
-	rm -f *.tgz
 	git pull
+	(cd deps/daemon.node-master && node-waf configure build)
 
 clean:
 	rm -rf deps/daemon.node-master/build
