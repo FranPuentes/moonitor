@@ -3,29 +3,13 @@ moonitor
 
 Monitor tool 4 Linux using node.js
 
-Moonitor será una herramienta de monitorización de elementos en una red.
+**Moonitor** is a tool to monitorize a set of elements at a network.
 
-Cada elemento a monitorizar ejecuta un (moon-daemon.js) y habrá al menos un agregador o broker (moon-broker.js) en la red.
+It is formed by a broker daemon, and several client daemons, 
+each client daemon report data - on request or periodically - to a broker, 
+and one broker support several networks each one with a indeterminated number of clients.
 
-En la configuración básica un broker controla la información enviada por los daemons bajo petición (cliente-servidor) y 
-mantiene una base de datos con la información proporcionada.
+**Moonitor** is pluggable, so each cloient daemon can have a set of plugins, each one specialized on a specific task.
 
-Cada broker tendrá un servidor web embebido encargado de publicar la información agregada de los daemons.
+Broker daemon use a built in graph oriented database to store all these data and a integrated web server to publish it.
 
-ficheros
---------
-
-common/*	Código común al broker y a los daemons
-
-moon-broker.js	Punto de entrada del broker (enlace)
-broker/*	Código fuente del broker
-modules/*	Módulos del broker
-
-moon-daemon.js	Punto de entrada del daemon (enlace)
-daemon/*	Código fuente del daemon
-plugins/*	Plugins del daemon
-
-Makefile	Auntomatización de varias cosas
-
-moon-broker.tgz	Broker package
-moon-daemon.tgz	Daemon package
