@@ -5,6 +5,7 @@ clean:
 	rm -f *.pid
 
 pull:
+	rm -f *.tgz
 	git pull
 
 commit: clean
