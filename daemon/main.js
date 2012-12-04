@@ -13,40 +13,111 @@ var NODE=process.argv[0];
 var SELF=Path.resolve(process.argv[1]);
 var CWD =Path.dirname(SELF);
 var PID =Path.join(CWD,Path.basename(SELF,Path.extname(SELF))+'.pid');
-var KILL=Path.join(CWD,Path.basename(SELF,Path.extname(SELF))+'.kill');
 var CONF=Path.join(CWD,Path.basename(SELF,Path.extname(SELF))+'.conf');
+var LOG =Path.join(CWD,Path.basename(SELF,Path.extname(SELF))+'.log');
 
-var Tools =require(Path.join(CWD,'common/tools.js' ));
-var Level5=require(Path.join(CWD,'common/level5.js'));
+var Tools   =require(Path.join(CWD,'common/tools.js' ));
+var Level5  =require(Path.join(CWD,'common/level5.js'));
+var Demonize=require(Path.join(CWD,"common/demonize"));
 
-var log=console.log;
-
-if(Fs.existsSync(PID))
+if(process.argv.length>=2)
   {
-   try
-     {
-      var oldPid=parseInt(Fs.readFileSync(PID),10);
-      try
-        {
-         process.kill(oldPid,'SIGUSR2');
-         console.log("There are other instance of me working hard :-)");
-         process.exit(0);
-        }
-      catch(err)
-        {
-         Fs.unlinkSync(PID);
-        }
-     }
-   catch(err)
-     {
-      console.err(err);
-      console.err("Failed to load and parse '"+PID+"'");
-      process.exit(1);
-     }
+   switch(process.argv[2])
+         {
+          case 'help':
+               Tools.printUsageAndExit(0);
+
+          case 'status':
+               if(Tools.existsOldInstance(PID))
+                 {
+                  console.log("There are other instance of moon-daemon working hard");
+                  process.exit(1);
+                 }
+               else
+                 { 
+                  console.log("Moon-daemon is down");
+                  process.exit(0);
+                 }
+ 
+          case 'stop':
+               Tools.killOldInstance(PID);
+               process.exit(0);
+
+          case 'start':
+               //parameters:
+               //  --conf <file>
+               //  --nolog
+               //
+               for(var i=3; i<process.argv.length; i++)
+                  {
+                   var arg=process.argv[i];
+
+                   if(arg==='--nolog')
+                     {
+                      LOG=undefined;
+                     }
+                   else
+                   if(arg==='--conf' && (i+1)<process.argv.length)
+                     {
+                      i+=1;
+                      CONF=process.argv[i];
+                     }
+                   else
+                   Tools.printUsageAndExit(1);
+                  }
+               if(Tools.existsOldInstance(PID))
+                 {
+                  console.log("The are other instance of moon-daemon working");
+                  Tools.printUsageAndExit(0);
+                 }
+               //following, the daemon ...
+               break;
+
+          default:
+               Tools.printUsageAndExit(1);
+         }
   }
 
-Fs.writeFileSync(PID,process.pid,'utf8');
+console.log("Starting the daemon ...");
+  
+//////// DEAMON ///////////////////////////////////////////////////////////////////////////////////////////////
+var dPID=Demonize.start();
+Demonize.lock(PID);
+Demonize.closeIO();
+  
+//////// default conf data ///////////////////////////////////
+var conf=
+    {
+     //send 'iamalive' each 'announce' seconds (0 - disable)
+     announce: 60,
+     //bind to this port
+     port:     1233,
+     //network
+     network:  { name:'localnet', port:1234, broadcast:'127.255.255.255' },
+     //plugins directory
+     plugins:  './plugins',
+    };
 
+process.title="moon::daemon";
+
+function log()
+{
+ if(Tools.isset(LOG))
+ try
+   {
+    var text="";
+    for(var i in arguments)
+       {
+        text+=arguments[i].toString()+"\n";
+       } 
+    Fs.appendFile(LOG,text,'utf8');
+   }
+ catch(err)
+   {
+    Fs.appendFile(LOG,"ERROR: "+err);
+   }
+}   
+                                                       
 process.on('exit',
            function()
            {
@@ -59,7 +130,7 @@ process.on('SIGINT',
            function()
            {
             console.log("INT signal!");
-            process.exit(0);
+            server.close();
            });
 
 process.on('SIGUSR2',
@@ -68,21 +139,6 @@ process.on('SIGUSR2',
             console.log("USR2 signal!");
            });
 
-process.title="moonitor::daemon";
-
-//TODO: crear el script KILL que mata elegantemente esta instancia
-
-var conf=
-    {
-     //send 'iamalive' each 'announce' seconds (0 - disable)
-     announce: 60,
-     //bind to this port
-     port:     1233,
-     //network
-     network:  { name:'localnet', port:1234, broadcast:'127.255.255.255' },
-     //plugins directory
-     plugins:  './plugins',
-    };
 
 if(Fs.existsSync(CONF))
   {
@@ -97,12 +153,6 @@ if(Fs.existsSync(CONF))
       process.exit(1);
      }
   }
-
-for(var i=2; i<process.argv.length; i++)
-   {
-    var arg=process.argv[i];
-    //TODO: procesar argumentos
-   }
 
 /////////////////////////////////////////////////////////// server ////////////////////////////////////////////
 //
@@ -355,7 +405,7 @@ function onListening()
         }
      }
  
- console.log('Now listening ...');
+ log('Now listening ...');
  this.setBroadcast(true);
  iamalive(this);
  if(Tools.isset(conf.announce) && conf.announce>0)
@@ -367,12 +417,12 @@ function onListening()
 function onClose()
 {
  removeInterval('iamalive');
- console.log('Close');
+ log('Close');
 }
 
 function onError(err)
 {
- console.err('Error: '+err);
+ log('Error: '+err);
 }
 
 if(Tools.isset(conf.port))
@@ -383,14 +433,5 @@ if(Tools.isset(conf.port))
    server.on('close',    onClose.    bind(server));
    server.on('error',    onError.    bind(server));
    server.bind(conf.port);
-   console.log('Server created');
+   log('Server created');
   }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-process.on("SIGINT",
-           function()
-             {
-              console.log("Ending ...");
-              process.exit(0);
-             });
