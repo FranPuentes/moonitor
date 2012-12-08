@@ -39,6 +39,16 @@ function killOldInstance(lockfile)
  return 0;
 }
 
+//Array: remove duplicates (works with integers and strings)
+function listDedup(list)
+{
+ var result = [];
+ var object = {};
+ list.forEach(function(item) { object[item] = null; });
+ result = Object.keys(object);
+ return result;
+}
+
 /// exports ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 module.exports=
@@ -48,9 +58,16 @@ module.exports=
       return ((typeof v)!=='undefined' && v!==null);
      },
 
+   isnset:function(v)
+     {
+      return ((typeof v)==='undefined' || v===null);
+     },
+
    printUsageAndExit: printUsageAndExit,
    existsOldInstance: existsOldInstance,
    killOldInstance:   killOldInstance,
+   
+   listDedup:         listDedup,
   }
   
   

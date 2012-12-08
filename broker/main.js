@@ -182,101 +182,15 @@ if(Fs.existsSync(CONF))
   }
 
 /////////////////////////////////////////////////////////// database //////////////////////////////////////////
-// graph oriented database
-//
-// objects::
-//   id: { type, name, ... }
-//
-// relations::
-//   id: { type, left, right, ... }
-//
-//   relations are from the left to the right and with a type
-//   left and right are pointers (id) to objects
-//
 
-var objects  =[];
-var relations=[];
-
-function searchRow(table,keys,from)
-{
- for(var i=(Tools.isset(from)?from+1:0); i<table.length; i++)
-    {
-     var row=table[i];
-
-     var all=true;
-     for(var key in keys)
-        {
-         if(!Tools.isset(row[key]) || row[key]!==keys[key]) { all=false; break; }
-        }
-        
-     if(all===true) return i;
-    }
-}
-
-function insertRow(table,keys,data)
-{
- var id=table.length;
- var row={};
- for(var key in keys) row[key]=keys[key];
- for(var key in data) row[key]=data[key];
- row.updated=new Date();
- //log("INSERT: "+Util.inspect(row,false,1));
- table[id]=row;
- return id;
-}
-
-function updateRow(table,keys,data)
-{
- var id=searchRow(table,keys);
- 
- if(Tools.isset(id))
-   {
-    var row=table[id];
-    for(var key in data) row[key]=data[key];
-    row.updated=new Date();
-    //log("UPDATE: "+Util.inspect(row,false,1));
-    return id;
-   }
-}
-
-function updateOrInsertRow(table,keys,data)
-{
- var id=updateRow(table,keys,data);
- 
- if(Tools.isset(id)) return id;
- else                return insertRow(table,keys,data);
-}
-
-function retrieveRow(table,id)
-{
- return table[id];
-}
-
-function retrieveRows(table,keys)
-{
- var rows=[];
- 
- for(var i=0; i<table.length; i++)
-    {
-     var row=table[i];
-
-     var all=true;
-     for(var key in keys)
-        {
-         if(!Tools.isset(row[key]) || row[key]!==keys[key]) { all=false; break; }
-        }
-
-     if(all===true) rows[i]=row;
-    }
-    
- return (rows.length>0?rows:null);
-}
+var Godb  =require(Path.join(CWD,"modules/godb.js" ));
+var XPaths=require(Path.join(CWD,"modules/xpaths.js" ));
 
 /////////////////////////////////////////////////////////// network link //////////////////////////////////////
 
 for(var i=0; i<conf.networks.length; i++)
    {
-    insertRow(objects,{type:"network",name:conf.networks[i].name},{});
+    Godb.insertRow(Godb.objects,{type:"network",name:conf.networks[i].name},{});
    }
 
 function onMessage(msg,peer)
@@ -284,7 +198,7 @@ function onMessage(msg,peer)
  var data=Level5.get(this,peer.address,peer.port,msg);
  if(Tools.isset(data))
    {
-    var nId=updateRow(objects,{type:"network",name:data.network},{});
+    var nId=Godb.updateRow(Godb.objects,{type:"network",name:data.network},{});
 
     //log("BROKER: New message "+Util.inspect(data,false,1,''));
     
@@ -293,14 +207,14 @@ function onMessage(msg,peer)
        //
        if(Tools.isset(nId) && data.rol==='daemon')
          {
-          if(!searchRow(objects,{type:'host',name:data.who}))
+          if(!Godb.searchRow(Godb.objects,{type:'host',name:data.who}))
             {
              Level5.send(this,peer.address,peer.port, { command:"ping", network:data.network, rol:"broker", who:Os.hostname() });
             }
           else
             {
-             var hId=updateRow(objects,{type:'host',name:data.who},{address:peer.address,port:peer.port});
-             updateOrInsertRow(relations,{left:nId,right:hId,type:'contains'},{});
+             var hId=Godb.updateRow(Godb.objects,{type:'host',name:data.who},{address:peer.address,port:peer.port});
+             Godb.updateOrInsertRow(Godb.relations,{left:nId,right:hId,type:'contains'},{});
             }
          }
       }
@@ -319,8 +233,8 @@ function onMessage(msg,peer)
        //
        if(Tools.isset(nId) && data.rol==='daemon' && data.from===Os.hostname())
          {
-          var hId=updateOrInsertRow(objects,{type:'host',name:data.who},{address:peer.address,port:peer.port});
-          updateOrInsertRow(relations,{left:nId,right:hId,type:'contains'},{});
+          var hId=Godb.updateOrInsertRow(Godb.objects,{type:'host',name:data.who},{address:peer.address,port:peer.port});
+          Godb.updateOrInsertRow(Godb.relations,{left:nId,right:hId,type:'contains'},{});
 
           Level5.send(this,peer.address,peer.port, { command:"plugins", network:data.network  });
          }
@@ -331,18 +245,18 @@ function onMessage(msg,peer)
        //
        if(Tools.isset(nId))
          {
-          var hId=updateOrInsertRow(objects,{type:'host',name:data.who},{address:peer.address,port:peer.port});
-          updateOrInsertRow(relations,{left:nId,right:hId,type:'contains'},{});
+          var hId=Godb.updateOrInsertRow(Godb.objects,{type:'host',name:data.who},{address:peer.address,port:peer.port});
+          Godb.updateOrInsertRow(Godb.relations,{left:nId,right:hId,type:'contains'},{});
           
           for(var i in data.plugins)
              {
               var plugin=data.plugins[i];
-              var pId=updateOrInsertRow(objects,{type:'plugin',name:plugin.name},{description:plugin.description});
+              var pId=Godb.updateOrInsertRow(Godb.objects,{type:'plugin',name:plugin.name},{description:plugin.description});
               
               for(var deliver in plugin.delivers)
                  {
                   var options=plugin.delivers[deliver];
-                  insertRow(relations,{left:hId,right:pId,type:'deliver'},{name:deliver, options:options});
+                  Godb.insertRow(Godb.relations,{left:hId,right:pId,type:'deliver'},{name:deliver, options:options});
                   if(Tools.isset(options.static) && options.static===true)
                     {
                      Level5.send(this,peer.address,peer.port, { command:"get", network:data.network, plugin:plugin.name, what:deliver });
@@ -357,18 +271,26 @@ function onMessage(msg,peer)
        //
        if(Tools.isset(nId))
          {
-          var hId=searchRow(objects,{type:'host',  name:data.who   });
-          var pId=searchRow(objects,{type:'plugin',name:data.plugin});
+          var hId=Godb.searchRow(Godb.objects,{type:'host',  name:data.who   });
+          var pId=Godb.searchRow(Godb.objects,{type:'plugin',name:data.plugin});
 
           if(Tools.isset(hId) && Tools.isset(pId))
             {
-             var rId=searchRow(relations,{type:'deliver',left:hId,right:pId,name:data.what});
+             var rId=Godb.searchRow(Godb.relations,{type:'deliver',left:hId,right:pId,name:data.what});
              if(Tools.isset(rId))
                {
-                var row=retrieveRow(relations,rId);
-                row.value=data.value;
-                row.updated=new Date();
-                //log("response GET::"+data.plugin+"@"+data.who+" => "+data.what+" = "+Util.inspect(data.value,false,1));
+                if(Tools.isset(data.value) && Tools.isset(data.value.path))
+                  {
+                   var path=data.value.path;
+                   delete data.value.path;
+                   var value=XPaths.resolve({NETWORK:nId,HOST:hId,PLUGIN:pId},Godb.objects,Godb.relations,path,data.value);
+                   //log("response GET::"+data.plugin+"@"+data.who+" => "+data.what+" = "+Util.inspect(value,false,1)+" with path="+path+"");
+                  }
+                else
+                  {
+                   log("Invalid response 'value' format:");
+                   log(Util.inspect(data.value,false,1));
+                  }
                }
             }
          }
@@ -465,9 +387,9 @@ function webRequest(request,response)
  echo("</head>");
  echo("<body>");
  echo("  <table>");
- for(var id in objects)
+ for(var id in Godb.objects)
     {
-     var object=objects[id];
+     var object=Godb.objects[id];
      
      echo("<tr>");
      echo("<td>");

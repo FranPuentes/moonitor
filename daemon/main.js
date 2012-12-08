@@ -126,21 +126,21 @@ process.on('exit',
            function()
            {
             removeInterval('iamalive');
-            console.log("Ending ...");
+            log("Ending ...");
             Fs.unlinkSync(PID);
            });
 
 process.on('SIGINT',
            function()
            {
-            console.log("INT signal!");
+            log("INT signal!");
             server.close();
            });
 
 process.on('SIGUSR2',
            function()
            {
-            console.log("USR2 signal!");
+            log("USR2 signal!");
            });
 
 process.on('uncaughtException',
@@ -159,7 +159,7 @@ if(Fs.existsSync(CONF))
      }
    catch(err)  
      {
-      console.err("Error: "+err);
+      log("Error: "+err);
       process.exit(1);
      }
   }
