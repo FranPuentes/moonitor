@@ -3,8 +3,30 @@ var Fs        =require("fs");
 var Path      =require("path");
 
 var Tools=require(Path.resolve(__dirname,"../common/tools.js"));
+/*
+function log()
+{
+ var LOG=Path.resolve(__dirname,"../moon-broker.log");
+ try
+   {
+    var text="";
+    for(var i in arguments)
+       {
+        text+=arguments[i].toString()+"\n";
+       }
+    Fs.appendFileSync(LOG,text,'utf8');
+   }
+ catch(err)
+   {
+    Fs.appendFileSync(LOG,"ERROR: "+err);
+   }
+}
+*/
+var isspace=function(chr) { return (chr==' ' || chr=='\n' || chr=='\r' || chr=='\t');  }
+var isdigit=function(chr) { return (chr>='0' && chr<='9');                             }
+var isalpha=function(chr) { return ((chr>='a' && chr<='z') || (chr>='A' && chr<='Z')); }
 
-function $initialState(path)
+function initialState(path)
 {
       if(Path.extname(path)===".nsp") return 0;  //javascript embedded into alien code
  else if(Path.extname(path)===".njs") return 50; //javascript with embedded alien code
@@ -22,7 +44,7 @@ function normalizeString(str)
        {
         if(s===0)
           {
-           if(!Tools.isspace(str[i])) { s=1;i-=1;continue; }
+           if(!isspace(str[i])) { s=1;i-=1;continue; }
           }
         else
           {
@@ -37,9 +59,6 @@ function normalizeString(str)
 
 function Whirler()
 {
- var source=null;
- var target=null;
-
  var $out='';
  
  var $s    =0;
@@ -49,9 +68,6 @@ function Whirler()
  var $c    =0;
  var $store=false;
  var $pos  =[1,0];
-
- var $langs={};//lista de cadenas registradas
- var $langc=0; //contador de cadenas anónimas
 
  function $send(chr)
       {
@@ -64,13 +80,14 @@ function Whirler()
       {
        if(code.length>0)
          {
-          $send("__ECHO([");
+          $send("response.echo([");
           for(var i=0; i<code.length; i++)
              {
               $send(String(code.charCodeAt(i)));
               if((i+1)<code.length) $send(',');
              }
           $send("]);");
+          $send(" // "+normalizeString(code.trim())+"\n")
          }
        return '';
       }
@@ -81,8 +98,9 @@ function Whirler()
              {
               //HTML, CSS, ...
               case 0:
-                   if(token==='<') $s=1;
-                   else            $code+=token;
+                        if(token==='<' ) $s=1;
+                   else if(token==='\n') { $code+=token;$code=$emit($code); }
+                   else                  $code+=token;
                    break;
 
               case 1://<
@@ -91,7 +109,7 @@ function Whirler()
                    break;
 
               case 2://<?
-                   if(!Tools.isspace(token)) $buff+=token;
+                   if(!isspace(token)) $buff+=token;
                    else
                      {
                            if($buff===''    ) { $code=$emit($code);      $s=50;             }
@@ -105,10 +123,9 @@ function Whirler()
               case 50:
                         if(token==='?'         )                                                     $s= 60;
                    else if(token==='/'         )                                                     $s=300;
-                   else if(token==='@'         )                                                     $s=500;
                    else if(token==='"'         ) { $store=true;$code='';$send(token); $r=51; $c='"'; $s=100; }
                    else if(token==="'"         ) { $store=true;$code='';$send(token); $r=51; $c="'"; $s=100; }
-                   else if(Tools.isspace(token))                                                     $s=200;
+                   else if(isspace(token)      )                                                     $s=200;
                    else                                                 $send(token);
                    break;
 
@@ -121,7 +138,7 @@ function Whirler()
                    break;
 
               case 60:
-                   if(token==='>')               $s=0;
+                   if(token==='>') { $send('\n');$s=0;               }
                    else            { $send('?'); $s=50; next(token); }
                    break;
 
@@ -143,11 +160,11 @@ function Whirler()
 
               //ESPACIOS EN BLANCO
               case 200://añadiendo un ws
-                   if(!Tools.isspace(token)) { $send(' '); $s=50; next(token); }
+                   if(!isspace(token)) { $send(' '); $s=50; next(token); }
                    break;
 
               case 201://sin añadir un ws
-                   if(!Tools.isspace(token)) { $s=50; next(token); }
+                   if(!isspace(token)) { $s=50; next(token); }
                    break;
 
               //COMENTARIOS TODO: o expresiones regulares /.../
@@ -174,55 +191,14 @@ function Whirler()
                    break;
 
               case 350:
-                   if(!Tools.isspace(token)) { $s=50; next(token); }
+                   if(!isspace(token)) { $s=50; next(token); }
                    break;
 
-              //@ ...
-              case 500:
-                        if(token===':'         ) { $buff='';   $s=502; }
-                   else if(token==='_'         ) { $buff=token;$s=501; }
-                   else if(token==='$'         ) { $buff=token;$s=501; }
-                   else if(Tools.isalpha(token)) { $buff=token;$s=501; }
-                   else                            throw new Error("Syntax error: illegal character '@'");
-                   break;
-
-              case 501:
-                        if(token===':'         ) { $s=502;       }
-                   else if(token==='_'         ) { $buff+=token; }
-                   else if(token==='$'         ) { $buff+=token; }
-                   else if(Tools.isalpha(token)) { $buff+=token; }
-                   else if(Tools.isdigit(token)) { $buff+=token; }
-                   else                            throw new Error("Syntax error: illegal identifier after '@'");
-                   break;
-
-              case 502:
-                        if(token==='"') { $store=true;$code='';$send(token);$c='"'; $r=510; $s=100; }
-                   else if(token==="'") { $store=true;$code='';$send(token);$c="'"; $r=510; $s=100; }
-                   else                 throw new Error("Syntax error: illegal characters after '@"+$buff+":'");
-                   break;
-
-              case 510:
-                   var key=null;
-                   if($buff==='') { key="ID$"+$langc;$langc+=1; }
-                   else             key=$buff;
-                   $langs[key]=Tools.unquoteString(normalizeString($code));
-                   $store=false;
-                   $send("__SLID('"+key+"')");
-                   $buff='';
-                   $code='';
-                   $s=50;
-                   next(token);
-                   break;
               default:
                    throw new Error("Internal error: unknow state "+$s);
              }
       }
 
- this.langs=function()
-      {
-       return $langs;
-      }
- 
  this.doit=function(code,opts)
       {
        var tmini=process.hrtime()[1];
@@ -232,7 +208,7 @@ function Whirler()
 
        $out='';
 
-       $s=$initialState(source);
+       $s=initialState(source);
        $code ='';
        $buff ='';
        $r    =0;
@@ -240,9 +216,6 @@ function Whirler()
        $store=false;
        $pos  =[1,0];
 
-       $langs={};//lista de cadenas registradas
-       $langc=0; //contador de cadenas anónimas
-       
        var rt='';
        rt+="// WHIRLER for node.js\n";
        rt+="// (c) 2012 Francisco Puentes, fran@puentescalvo.com\n";
@@ -251,17 +224,13 @@ function Whirler()
        rt+="// source:"+source+"\n";
        rt+="// target:"+target+"\n";
        rt+="\n";
-       rt+="// Please, don't use inline regexp syntax /.../ (to do)'\n";
+       rt+="// Please, don't use inline regexp syntax /.../ for the time being\n";
        rt+="\n";
-       rt+="var __ECHO=$script.echo;\n";
-       rt+="var __SLID=$script.language.$;\n";
        for(var i=0; i<code.length; i++)
           {
-           //var ncode=code[i];
-           var scode=String.fromCharCode(code[i]);
+           var scode=code[i];
            if(scode==='\n') { $pos[1]=0; $pos[0]+=1; }
            else               $pos[1]+=1;
-           //log("$s="+$s+" token="+(ncode<32?ncode:"'"+String.fromCharCode(ncode)+"'"));
            next(scode);
           }
        $emit($code);
@@ -269,7 +238,6 @@ function Whirler()
        rt+="\n";
        rt+="//It took "+Math.round(((process.hrtime()[1])-tmini)/1000000.0)+" msecs\n";
 
-       //log("Whirler: Final state="+$s);
        return ($s==0 || $s==1 || $s==2 || $s==50 || $s==200 || $s==201 || $s==310 || $s==350 ? rt : false );
       } 
 }

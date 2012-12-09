@@ -100,7 +100,7 @@ var conf=
      http:
        {
         bind: { address:'127.0.0.1', port:8086 },
-        pages:{ static:'web/static', nonstatic:'web/dynamic' },
+        site: { root:'web' },
        }
     };
 
@@ -143,13 +143,14 @@ process.on('SIGINT',
             if(Tools.isset(server))
               {
                log("Closing network link ...");
-               server.close();
+               try { server.close(); } catch(err){}
               }
             if(Tools.isset(http))
               {
                log("Closing HTTP link ...");
-               http.close();
-              } 
+               try { http.close(); } catch(err){}
+              }
+            process.nextTick(function(){process.exit(0);});
            });
 
 process.on('SIGUSR2',
@@ -374,54 +375,219 @@ if(Tools.isset(conf.port))
   }
 
 /////////////////////////////////////////////////////////// web server ////////////////////////////////////////
+var Http   =require('http');
+var Url    =require('url' );
+var Vm     =require('vm'  );
+var Whirler=require(Path.join(CWD,"modules/whirler.js" )).Whirler;
+
+var HttpError=function(code,text)
+{
+ Error.captureStackTrace(this,this);
+ this.statusCode=code;
+ this.message = text || Http.STATUS_CODES[code];
+}
+
+Util.inherits(HttpError, Error);
+HttpError.prototype.name = "HTTP Error";
+
+function isFile(filename)      { try { var stat=Fs.statSync(filename); return stat.isFile();      } catch(err) { return null; } }
+function isDirectory(filename) { try { var stat=Fs.statSync(filename); return stat.isDirectory(); } catch(err) { return null; } }
+
+function translateUrl2Path(url,root)
+{
+ var path=url.pathname.split('/');
+ var tmp=root;
+ var relt='/';
+ var rest='/';
+ for(var i=0; i<path.length; i++)
+    {
+     if(isDirectory(Path.join(tmp,path[i])))
+       {
+        tmp =Path.join(tmp, path[i]);
+        relt=Path.join(relt,path[i]);
+       }
+     else
+     if(isFile(Path.join(tmp,path[i])))
+       {
+        tmp =Path.join(tmp, path[i]);
+        relt=Path.join(relt,path[i]);
+        for(var j=i+1; j<path.length; j++)
+           {
+            rest=Path.join(rest,path[j]);
+           }
+        break;
+       }
+     else
+     return null;
+    }
+ return [tmp,relt,rest];
+}
+
+function contentType(filename)
+{
+ switch(Path.extname(filename))
+       {
+        case '.html': return "text/html";
+        case '.css' : return "text/css";
+        case '.jpg' : return "image/jpeg";
+        case '.png' : return "image/png";
+        case '.gif' : return "image/gif";
+        case '.ico' : return "image/x-icon";
+        case '.js'  : return "application/javascript";
+        case '.nsp' : return "text/html";
+        default     : throw new Error("Unknow extension: "+Path.extname(filename));
+       }
+}
+
+function $echo(request,response,args)
+{
+ for(var i in args)
+    {
+     var arg=args[i];
+     if((arg instanceof Buffer))
+       {
+        response.write(arg);
+       }
+     else
+     if(Util.isArray(arg))
+       {
+        var buffer=new Buffer(arg.length);
+        for(var j in arg)
+           {
+            buffer[j]=arg[j];
+           }
+        response.write(buffer);
+       }
+     else
+     if((typeof arg)==="string")
+       {
+        response.write(arg,'utf8');
+       }
+    }
+}
+
 function webRequest(request,response)
 {
- var echo=response.write.bind(response);
+ log(Util.inspect(request.url));
+ 
+ try
+   {
+    if(Tools.isset(conf.http.site.root))
+      {
+       var url =Url.parse(request.url,true);
+       var tmp=translateUrl2Path(url,Path.resolve(CWD,conf.http.site.root));
 
- response.writeHead(200,{'Content-Type':'text/html'});
- echo("<!DOCTYPE html>");
- echo("<html>");
- echo("<head>");
- echo("<meta charset='utf-8'/>");
- echo("<title></title>");
- echo("</head>");
- echo("<body>");
- echo("  <table>");
- for(var id in Godb.objects)
-    {
-     var object=Godb.objects[id];
-     
-     echo("<tr>");
-     echo("<td>");
-     echo("<b>"+object.type+"</b>");
-     echo("</td>");
-     echo("<td colspan='2'>");
-     echo("<i>"+object.name+"</i>");
-     echo("</td>");
-     echo("</tr>");
+       if(Tools.isset(tmp))
+         {
+          var filename=tmp[0];
+          var relt=    tmp[1];
+          var rest=    tmp[2];
 
-     for(key in object)
-        {
-         if(key!=='type' && key!=='name')
-           {
-            echo("<tr>");
-            echo("<td>");
-            echo("&nbsp;");
-            echo("</td>");
-            echo("<td>");
-            echo(key);
-            echo("</td>");
-            echo("<td>");
-            echo(Util.inspect(object[key]));
-            echo("</td>");
-            echo("</tr>");
-           }
-        }
-    }
- echo("  </table>");
- echo("</body>");
- echo("</html>");
- response.end();
+          if(isDirectory(filename))
+            {
+             if(Fs.existsSync(Path.join(filename,'index.html'))) filename=Path.join(filename,'index.html');
+             else
+             if(Fs.existsSync(Path.join(filename,'default.html'))) filename=Path.join(filename,'default.html');
+             else
+             if(Fs.existsSync(Path.join(filename,'default.nsp'))) filename=Path.join(filename,'default.nsp');
+             else
+             throw new HttpError(404);
+            }
+
+          if(Path.extname(filename)==='.nsp')
+            {
+             var whirler=new Whirler();
+             var code   =whirler.doit(Fs.readFileSync(filename,'utf8'),{source:filename,target:null});
+
+             // Environment:
+             //   response.statusCode
+             //   response.contentType
+             //   response.echo(...)
+             //   db.objects
+             //   db.relations
+             //   db.fx.searchRow
+             //   db.fx.insertRow
+             //   db.fx.updateRow
+             //   db.fx.updateOrInsertRow
+             //   db.fx.retrieveRow
+             //   db.fx.retrieveRows
+             //   db.fx.retrieveIDs
+             var sandbox=
+                 {
+                  Util:
+                    {
+                     isset:   Tools.isset,
+                     inspect: Util.inspect,
+                    },
+                    
+                  response:
+                    {
+                     get statusCode()    { return response.statusCode; },
+                     set statusCode(sc)  { response.statusCode=sc; },
+
+                     get contentType()   { return response.getHeader("Content-Type"); },
+                     set contentType(ct) { response.setHeader("Content-Type",ct); },
+
+                     echo: function(){ $echo(request,response,arguments); },
+                    },
+                  
+                  db:
+                    {
+                     get objects()   { return Godb.objects;   },
+                     get relations() { return Godb.relations; },
+                     fx:
+                       {
+                        searchRow:         Godb.searchRow,
+                        insertRow:         Godb.insertRow,
+                        updateRow:         Godb.updateRow,
+                        updateOrInsertRow: Godb.updateOrInsertRow,
+                        retrieveRow:       Godb.retrieveRow,
+                        retrieveRows:      Godb.retrieveRows,
+                        retrieveIDs:       Godb.retrieveIDs,
+                       },
+                    }
+                 };
+
+             response.setHeader("Date",(new Date()).toUTCString());
+             response.setHeader("Content-Type",contentType(filename));
+             response.setHeader("Last-Modified",(new Date()).toUTCString());
+             response.statusCode=200;
+             Vm.runInNewContext(code,sandbox,filename);
+            }
+          else
+            {
+             var stat=Fs.statSync(filename);
+             response.setHeader("Date",(new Date()).toUTCString());
+             response.setHeader("Content-Type",contentType(filename));
+             response.setHeader("Content-Length",stat.size);
+             response.setHeader("Last-Modified",stat.mtime.toUTCString());
+             response.writeHead(200);
+             response.write(Fs.readFileSync(filename));
+            }
+         }
+       else
+       throw new HttpError(503/*Service Unavailable*/);
+      }
+    else
+    throw new Error("Wrong conf::http.site.root");
+   }
+ catch(err)
+   {
+    if(err instanceof HttpError)
+      {
+       log("["+err.name+"]: "+err.message+" ("+err.statusCode+")");
+       response.statusCode=err.statusCode;
+      }
+    else
+      {
+       log("["+err.name+"]: "+err.message);
+       response.statusCode=500;//Internal Server Error
+      }
+   }
+ finally
+   {
+    response.end();
+   }
 }
 
 if(Tools.isset(conf.http) && Tools.isset(conf.http.bind))
