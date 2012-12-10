@@ -302,7 +302,8 @@ function resolveItem(t,predefs,objects,relations,item,data,pre)
                var row=Godb.retrieveRow((t===1?objects:relations),pre[j]);
                if(Tools.isset(row))
                  {
-                  row[field]=value;
+                  if(Tools.isset(data.what)) row[data.what]=value;
+                   else                      row[field]=value;
                   //log("  @"+pre[j]+": "+field+"="+Util.inspect(value));
                  }
                else

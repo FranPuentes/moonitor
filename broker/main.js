@@ -517,6 +517,8 @@ function webRequest(request,response)
                   Util:
                     {
                      isset:   Tools.isset,
+                     isDate:  Util.isDate,
+                     isArray: Util.isArray,
                      inspect: Util.inspect,
                     },
                     

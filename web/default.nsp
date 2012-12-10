@@ -3,19 +3,143 @@
  <head>
    <meta charset='utf-8'/>
    <title>Moonitor 4 Linux</title>
-   <link rel="stylesheet" href="jquery.ui/css/pepper-grinder/jquery-ui-1.9.2.custom.min.css"/>
-   <script type="text/javascript" src="jquery.min.js"></script>
-   <script type="text/javascript" src="jquery.ui/js/jquery-ui-1.9.2.custom.min.js"></script>
+   
+   <!-- **** JQUERY *********************************************** -->
+   <script type="text/javascript" src="jquery.js"></script>
+   <script type="text/javascript" src="jquery.cookie.js"></script>
+   
+   <!-- **** JQUERY UI ******************************************** -->
+   <script type="text/javascript" src="jquery-ui.js"></script>
+   <link rel="stylesheet" type="text/css" href="jquery-ui.css"/>
+   
+   <!-- **** JQUERY DYNATREE ************************************** -->
+   <script type="text/javascript" src="jquery.dynatree.js"></script>
+   <link rel="stylesheet" type="text/css" href="jquery.dynatree.css">
+   
    <script>
       $(function()
        {
         $("#tbTypes").tabs();
        });
+
    </script>
+
+   <style>
+      body
+      {
+       margin: 15px;
+       font-family: sans-serif;
+      }
+
+      a,
+      a:visited
+      {
+       color: navy;
+       text-decoration: none;
+       font-size: small;
+      }
+
+      a:hover
+      {
+       text-decoration: underline;
+      }
+
+      pre
+      {
+        background:#eee;
+        border:1px solid #999;
+        padding:.5em;
+        margin:.5em;
+        font-size:.9em;
+      }
+      
+      ul.dynatree-container
+      {
+      }
+
+      ul.dynatree-container span.td
+      {
+       position: absolute;
+       display: inline;
+       border-size: 1px;
+       overflow: hidden;
+       background-color: white;
+      }
+      
+      ul.dynatree-container span.td:nth-child(1)
+      {
+       position: static;
+      }
+      
+      ul.dynatree-container span.td:nth-child(2)
+      {
+       color: red;
+       left:  300px;
+       width: 300px;
+      }
+      
+      ul.dynatree-container span.td:nth-child(3)
+      {
+       color: green;
+       left:  600px;
+       width: 300px;
+      }
+   </style>
+   
  </head>
+ 
  <body>
     <?
       var echo=response.echo;
+
+      function diffTime(date)
+        {
+         var diff=((new Date().getTime()) - date.getTime())/1000;
+
+         if(diff<60   )    return Math.round(diff      )+" seconds";
+         if(diff<60*60)    return Math.round(diff/60   )+" minutes";
+         if(diff<60*60*24) return Math.round(10*diff/60/60)/10+" hours";
+
+         return diff+" seconds";
+        }
+
+      function objectToChildren(field,value,exceptions)
+        {
+         if(Util.isDate(value))
+           {
+            echo("{title:'"+field+"~"+value+"~"+diffTime(value)+" ago'},");
+           }
+         else
+         if(Util.isArray(value))
+           {
+            echo("{title:'"+field+"',isFolder:true,children:[");
+            for(var i in value)
+               {
+                objectToChildren(i,value[i]);
+               }
+            echo("]},");
+           }
+         else
+         if((typeof value)==='object')
+           {
+            echo("{title:'"+field+"',isFolder:true,children:[");
+            for(var i in value)
+               {
+                if(Util.isset(exceptions) && Util.isArray(exceptions))
+                  {
+                   if(exceptions.indexOf(i)<0)
+                     {
+                      objectToChildren(i,value[i]);
+                     }
+                  }
+                else  
+                objectToChildren(i,value[i]);
+               }
+            echo("]},");
+           }
+         else  
+         echo("{title:'"+field+"~"+value+"'},");
+        }
 
       var types=[];
       for(var id in db.objects)
@@ -39,19 +163,100 @@
          {
           var type=types[i];
           echo("<div id='"+type+"'><p>");
-          render(type);
+          renderType(type);
           echo("</p></div>\n");
          }
          
       echo("</div>\n");
 
-      function render(type)
+      function renderType(type)
         {
          echo("<p>");
          echo("<h1>type::"+type+"</h1>");
-         echo("<h3>related with</h3>");
-         echo("<div style='width:100%; height:100%; background:#736382; border:solid 1px black; padding: 5px 5px 5px 5px; color:white; font-size: 1.5em'>");
+         //echo("<h3>related with</h3>");
          
+         echo("<a href='#' id='btnExpandAll'>Expand all</a> - <a href='#' id='btnCollapseAll'>Collapse all</a> - <a href='#' id='btnSortAll'>Sort tree</a> - <a href='#' id='btnSortActive'>Sort current node</a>");
+         echo("<br/>");
+         echo("<br/>");
+    
+         echo("<div style='width:100%; height:100%; background:#736382; border:solid 1px black; padding: 5px 5px 5px 5px; color:white; font-size: 1.5em'>");
+         var objects=db.fx.retrieveRows(db.objects,{type:type});
+         if(Util.isset(objects) && objects!==false)
+           {
+            //echo(Util.inspect(objects));
+            //echo("<hr/>");
+            echo("<div id='tree_"+type+"'>");
+            echo("</div>\n");
+            ?>
+              <script>
+               $(<? echo("'#tree_"+type+"'"); ?>).dynatree ({
+                 minExpandLevel: 1,
+                 fx: { height: "toggle", duration: 200 },
+                 //autoCollapse: true,
+                 
+                 onActivate:function(node)
+                   {
+                   },
+                   
+                 onCustomRender: function(node)
+                   {
+                    // Render title as columns
+                    if(node.data.title.indexOf("~") === -1){ /* Default rendering */ return false; }
+                    var cols = node.data.title.split("~");
+                    var html = "<a class='dynatree-title' href='#'>";
+                    for(var i=0; i<cols.length; i++)
+                       {
+                        html += "<span class='td'>" + cols[i] + "</span>";
+                       }
+                    return html + "</a>";
+                   },
+                       
+                 children:
+                   [
+                    <?
+                      for(var id in objects)
+                         {
+                          var object=objects[id];
+                          var updated=object.updated;
+                          echo("{title:'"+object.name+"~(oid:"+id+")~"+diffTime(updated)+"', isFolder:true, ");
+                          echo(" children:[");
+                          for(var field in object)
+                             {
+                              //if(field!=='type' && field!=='name' && field!=='updated')
+                                {
+                                 var value=object[field];
+                                 objectToChildren(field,value);
+                                }
+                             }
+
+                          echo("{title:'related to me', isFolder:true, ");
+                          echo(" children:[");
+                          var relations=db.fx.retrieveRows(db.relations,{left:Number(id)});
+                          if(Util.isset(relations) && Util.isArray(relations) && relations.length>0)
+                            {
+                             for(var i in relations)
+                                {
+                                 var relation=relations[i];
+                                 var right=db.fx.retrieveRow(db.objects,Number(relation.right));
+                                 var updated=relation.updated;
+                                 //echo("{title:'"+right.type+"::"+right.name+"'},");
+                                 if(relation.type==='deliver' && Util.isset(relation.name))
+                                   {
+                                    objectToChildren(right.name+"::"+relation.name+"~"+right.type+"~"+diffTime(updated),relation,['left','right','updated','name','type']);
+                                   }
+                                 else  
+                                 objectToChildren(right.name+"~"+right.type+"~"+diffTime(updated),relation,['left','right','updated']);
+                                }
+                            }
+                          echo("]},");
+                          echo("]}");
+                         }
+                    ?>
+                   ]
+                });
+              </script>
+            <?
+           }
          echo("</div>");
          echo("</p>");
         }
