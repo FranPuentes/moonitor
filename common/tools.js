@@ -49,6 +49,54 @@ function listDedup(list)
  return result;
 }
 
+///////////////////////////////////////////////////////////
+var intervals={};
+
+function removeAllIntervals()
+{
+ for(var key in intervals)
+    {
+     var iid=intervals[key];
+     if((typeof iid)!=='undefined' && iid!==null)
+       {
+        clearInterval(iid);
+        delete intervals[key];
+       }
+    }
+}
+
+function removeInterval(key)
+{
+ var iid=intervals[key];
+ if((typeof iid)!=='undefined' && iid!==null)
+   {
+    clearInterval(iid);
+    delete intervals[key];
+   }
+}
+
+function installInterval(key,repeat,times,callback/*...*/)
+{
+ removeInterval(key);
+ if(repeat>0)
+   {
+    var args=[].slice.call(arguments,4);
+    intervals[key]=setInterval(function(args)
+                                 {
+                                  if(times===null) callback.apply(this,args);
+                                  else
+                                  if((typeof times)==='number')
+                                    {
+                                     if(times>0) callback.apply(this,args);
+                                     else        removeInterval(key);
+                                     times-=1;
+                                    }
+                                 },
+                               repeat*1000,
+                               args);
+   }
+}
+
 /// exports ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 module.exports=
@@ -68,6 +116,11 @@ module.exports=
    killOldInstance:   killOldInstance,
    
    listDedup:         listDedup,
+
+   removeAllIntervals:removeAllIntervals,
+   removeInterval:    removeInterval,
+   installInterval:   installInterval,
+   
   }
   
   

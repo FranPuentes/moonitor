@@ -150,6 +150,7 @@ process.on('SIGINT',
                log("Closing HTTP link ...");
                try { http.close(); } catch(err){}
               }
+            Tools.removeAllIntervals();
             process.nextTick(function(){process.exit(0);});
            });
 
@@ -258,10 +259,40 @@ function onMessage(msg,peer)
                  {
                   var options=plugin.delivers[deliver];
                   Godb.insertRow(Godb.relations,{left:hId,right:pId,type:'deliver'},{name:deliver, options:options});
-                  if(Tools.isset(options.static) && options.static===true)
+                  Level5.send(this,peer.address,peer.port, { command:"get", network:data.network, plugin:plugin.name, what:deliver });
+                  if(Tools.isset(options.static) && options.static===false)
                     {
-                     Level5.send(this,peer.address,peer.port, { command:"get", network:data.network, plugin:plugin.name, what:deliver });
-                    } 
+                     /*
+                     if(Tools.isset(options.updates))
+                       {
+                        var update=options.updates.update;
+                        var times =options.updates.times ;
+
+                        if(Tools.isset(update))
+                          {
+                           var key=data.who+"::"+deliver;
+                           if(Util.isArray(update) && update.length===2)
+                             {
+                              update=Math.round(Math.floor(Math.random()*(update[1]-update[0]+1))+update[0]);
+                              log("request each "+update+" seconds for "+key);
+                              Tools.installInterval(key,updates,times,function()
+                                {
+                                 Level5.send(this,peer.address,peer.port, { command:"get", network:data.network, plugin:plugin.name, what:deliver });
+                                });
+                             }
+                           else  
+                           if((typeof update)==='number')
+                             {
+                              log("request each "+update+" seconds for "+key);
+                              Tools.installInterval(key,updates,times,function()
+                                {
+                                 Level5.send(this,peer.address,peer.port, { command:"get", network:data.network, plugin:plugin.name, what:deliver });
+                                });
+                             }
+                          }
+                       }
+                     */  
+                    }
                  }
              }
          }
@@ -520,6 +551,25 @@ function webRequest(request,response)
                      isDate:  Util.isDate,
                      isArray: Util.isArray,
                      inspect: Util.inspect,
+                    },
+
+                  include: function(fn)
+                    {
+                     try
+                       {
+                        var code=Fs.readFileSync(Path.resolve(Path.dirname(filename),fn),"utf8");
+                        return eval(code);
+                       }
+                     catch(err)
+                       {
+                        log("ERR @ eval('"+fn+"')");
+                        throw err;
+                       }
+                    },
+
+                  request:
+                    {
+                     //TODO: ...
                     },
                     
                   response:

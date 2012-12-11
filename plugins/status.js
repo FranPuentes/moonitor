@@ -14,7 +14,6 @@ function commandGet(what)
         case 'TotalMemory':    return { what:what, path:"{HOST}::value", value:Os.totalmem()          };
         case 'FreeMemory':     return { what:what, path:"{HOST}::value", value:Os.freemem()           };
         case 'Cpus':           return { what:what, path:"{HOST}::value", value:Os.cpus()              };
-        case 'Interfaces':     return { what:what, path:"{HOST}::value", value:Os.networkInterfaces() };
         
         case 'CWD':            return { what:what, path:"{HOST}::['monitorized',{'process','moon-daemon'}]::value", value:process.cwd()         };
         case 'Versions':       return { what:what, path:"{HOST}::['monitorized',{'process','moon-daemon'}]::value", value:process.versions      };
@@ -52,7 +51,6 @@ module.exports=
                    'TotalMemory':    { static:false, },
                    'FreeMemory':     { static:false, },
                    'Cpus':           { static:true,  },
-                   'Interfaces':     { static:false, },
                    'CWD':            { static:false, },
                    'Versions':       { static:true,  },
                    'Config':         { static:true,  },
