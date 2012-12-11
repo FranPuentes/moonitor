@@ -9,7 +9,7 @@ clean:
 	rm -f *.pid
 
 tgz:
-	tar czvf moon-broker.tgz broker moon-broker.js common modules web deps/daemon.node-master deps/jquery*
+	tar czvf moon-broker.tgz broker moon-broker.js common modules web deps
 	tar czvf moon-daemon.tgz daemon moon-daemon.js common plugins     deps/daemon.node-master
 
 commit:
