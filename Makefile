@@ -2,6 +2,8 @@
 pull:
 	git pull
 	(cd deps/daemon.node-master && node-waf clean && node-waf configure build)
+	mkdir -p sessions
+	mkdir -p cache
 
 clean:
 	find . -name \*~ -delete
