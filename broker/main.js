@@ -79,13 +79,8 @@ if(process.argv.length>=2)
   }
 
 console.log("Starting the broker daemon ...");
-  
-//////// DEAMON ///////////////////////////////////////////////////////////////////////////////////////////////
-var dPID=Demonize.start();
-Demonize.lock(PID);
-Demonize.closeIO();
 
-//////// default conf data ///////////////////////////////////
+// default conf data
 var conf=
     {
      //send 'iamalive' each 'announce' seconds (0 - disable)
@@ -96,37 +91,35 @@ var conf=
        [
         { name:'localnet', broadcast:'127.255.255.255', port:1233 },
        ],
-       
+
      http:
        {
         bind: { address:'127.0.0.1', port:8086 },
-        site: { root:'web' },
+        site: { root:'web', sessions:'sessions', cache:'cache' },
        }
     };
+
+// DEAMON ////////////////////////////////////////////////////////////////////
+//
+var dPID=Demonize.start();
+Demonize.lock(PID);
+Demonize.closeIO();
 
 process.title="moon::broker";
 
 function log()
 {
  if(Tools.isset(LOG))
- try
    {
-    var text="";
-    for(var i in arguments)
-       {
-        text+=arguments[i].toString()+"\n";
-       } 
-    Fs.appendFileSync(LOG,text,'utf8');
-   }
- catch(err)  
-   {
-    Fs.appendFileSync(LOG,"ERROR: "+err);
+    var args=[].slice.call(arguments,0);
+    args.unshift(LOG);
+    Tools.log.apply(this,args);
    }
 }
 
 log("----- broker -----------------------------------------------------------------------");
 
-log("BROKER BASICS:"+Util.inspect({ NODE:NODE, SELF:SELF, CWD :CWD, PID :PID, CONF:CONF, LOG :LOG, }));
+log("BROKER BASICS:\n"+Util.inspect({ NODE:NODE, SELF:SELF, CWD :CWD, PID :PID, CONF:CONF, LOG :LOG, }));
 
 process.on('exit',
            function()
@@ -183,13 +176,64 @@ if(Fs.existsSync(CONF))
      }
   }
 
-/////////////////////////////////////////////////////////// database //////////////////////////////////////////
-
+// database //////////////////////////////////////////////////////////////////
+//
 var Godb  =require(Path.join(CWD,"modules/godb.js" ));
 var XPaths=require(Path.join(CWD,"modules/xpaths.js" ));
 
-/////////////////////////////////////////////////////////// network link //////////////////////////////////////
+var dbArena=
+    {
+     db:
+       {
+        get objects()   { return Godb.objects;   },
+        get relations() { return Godb.relations; },
+        fx:
+          {
+           searchRow:         Godb.searchRow,
+           insertRow:         Godb.insertRow,
+           updateRow:         Godb.updateRow,
+           updateOrInsertRow: Godb.updateOrInsertRow,
+           retrieveRow:       Godb.retrieveRow,
+           retrieveRows:      Godb.retrieveRows,
+           retrieveIDs:       Godb.retrieveIDs,
+          },
+       },
+    };
 
+Object.freeze(dbArena.db.fx);
+Object.freeze(dbArena.db);
+Object.freeze(dbArena);
+    
+// web server ////////////////////////////////////////////////////////////////
+//
+if(Tools.isset(conf.http) && Tools.isset(conf.http.bind) && Tools.isset(conf.http.site))
+  {
+   var WebHandler=require(Path.join(CWD,"modules/webhandler.js" )).Handler;
+   
+   var http=require('http')
+            .createServer(function(request,response)
+                          {
+                           new WebHandler(request,
+                                          response,
+                                          {
+                                           logfile:LOG,
+                                           root:Path.resolve(CWD,conf.http.site.root),
+                                           sessions:(Tools.isset(conf.http.site.sessions)?Path.resolve(CWD,conf.http.site.sessions):null),
+                                           cache:(Tools.isset(conf.http.site.cache)?Path.resolve(CWD,conf.http.site.cache):null),
+                                           defaults:['default.html','index.html','default.nsp'],
+                                           protocol:'http',
+                                           arena:dbArena,
+                                           scookie:"MOONID",
+                                          });
+                          });
+            
+   http.on('close',function(){ log("HTTP server closed"); });
+   http.listen(conf.http.bind.port,conf.http.bind.address);
+   log("HTTP listen on port "+conf.http.bind.port);
+  }
+
+// network link //////////////////////////////////////////////////////////////
+//
 for(var i=0; i<conf.networks.length; i++)
    {
     Godb.insertRow(Godb.objects,{type:"network",name:conf.networks[i].name},{});
@@ -404,251 +448,4 @@ if(Tools.isset(conf.port))
    server.bind(conf.port);
    log('Server created');
   }
-
-/////////////////////////////////////////////////////////// web server ////////////////////////////////////////
-var Http   =require('http');
-var Url    =require('url' );
-var Vm     =require('vm'  );
-var Whirler=require(Path.join(CWD,"modules/whirler.js" )).Whirler;
-
-var HttpError=function(code,text)
-{
- Error.captureStackTrace(this,this);
- this.statusCode=code;
- this.message = text || Http.STATUS_CODES[code];
-}
-
-Util.inherits(HttpError, Error);
-HttpError.prototype.name = "HTTP Error";
-
-function isFile(filename)      { try { var stat=Fs.statSync(filename); return stat.isFile();      } catch(err) { return null; } }
-function isDirectory(filename) { try { var stat=Fs.statSync(filename); return stat.isDirectory(); } catch(err) { return null; } }
-
-function translateUrl2Path(url,root)
-{
- var path=url.pathname.split('/');
- var tmp=root;
- var relt='/';
- var rest='/';
- for(var i=0; i<path.length; i++)
-    {
-     if(isDirectory(Path.join(tmp,path[i])))
-       {
-        tmp =Path.join(tmp, path[i]);
-        relt=Path.join(relt,path[i]);
-       }
-     else
-     if(isFile(Path.join(tmp,path[i])))
-       {
-        tmp =Path.join(tmp, path[i]);
-        relt=Path.join(relt,path[i]);
-        for(var j=i+1; j<path.length; j++)
-           {
-            rest=Path.join(rest,path[j]);
-           }
-        break;
-       }
-     else
-     return null;
-    }
- return [tmp,relt,rest];
-}
-
-function contentType(filename)
-{
- switch(Path.extname(filename))
-       {
-        case '.html': return "text/html";
-        case '.css' : return "text/css";
-        case '.jpg' : return "image/jpeg";
-        case '.png' : return "image/png";
-        case '.gif' : return "image/gif";
-        case '.ico' : return "image/x-icon";
-        case '.js'  : return "application/javascript";
-        case '.nsp' : return "text/html";
-        default     : throw new Error("Unknow extension: "+Path.extname(filename));
-       }
-}
-
-function $echo(request,response,args)
-{
- for(var i in args)
-    {
-     var arg=args[i];
-     if((arg instanceof Buffer))
-       {
-        response.write(arg);
-       }
-     else
-     if(Util.isArray(arg))
-       {
-        var buffer=new Buffer(arg.length);
-        for(var j in arg)
-           {
-            buffer[j]=arg[j];
-           }
-        response.write(buffer);
-       }
-     else
-     if((typeof arg)==="string")
-       {
-        response.write(arg,'utf8');
-       }
-    }
-}
-
-function webRequest(request,response)
-{
- log(Util.inspect(request.url));
- 
- try
-   {
-    if(Tools.isset(conf.http.site.root))
-      {
-       var url =Url.parse(request.url,true);
-       var tmp=translateUrl2Path(url,Path.resolve(CWD,conf.http.site.root));
-
-       if(Tools.isset(tmp))
-         {
-          var filename=tmp[0];
-          var relt=    tmp[1];
-          var rest=    tmp[2];
-
-          if(isDirectory(filename))
-            {
-             if(Fs.existsSync(Path.join(filename,'index.html'))) filename=Path.join(filename,'index.html');
-             else
-             if(Fs.existsSync(Path.join(filename,'default.html'))) filename=Path.join(filename,'default.html');
-             else
-             if(Fs.existsSync(Path.join(filename,'default.nsp'))) filename=Path.join(filename,'default.nsp');
-             else
-             throw new HttpError(404);
-            }
-
-          if(Path.extname(filename)==='.nsp')
-            {
-             var whirler=new Whirler();
-             var code   =whirler.doit(Fs.readFileSync(filename,'utf8'),{source:filename,target:null});
-
-             // Environment:
-             //   response.statusCode
-             //   response.contentType
-             //   response.echo(...)
-             //   db.objects
-             //   db.relations
-             //   db.fx.searchRow
-             //   db.fx.insertRow
-             //   db.fx.updateRow
-             //   db.fx.updateOrInsertRow
-             //   db.fx.retrieveRow
-             //   db.fx.retrieveRows
-             //   db.fx.retrieveIDs
-             var sandbox=
-                 {
-                  Util:
-                    {
-                     isset:   Tools.isset,
-                     isDate:  Util.isDate,
-                     isArray: Util.isArray,
-                     inspect: Util.inspect,
-                    },
-
-                  include: function(fn)
-                    {
-                     try
-                       {
-                        var code=Fs.readFileSync(Path.resolve(Path.dirname(filename),fn),"utf8");
-                        return eval(code);
-                       }
-                     catch(err)
-                       {
-                        log("ERR @ eval('"+fn+"')");
-                        throw err;
-                       }
-                    },
-
-                  request:
-                    {
-                     //TODO: ...
-                    },
-                    
-                  response:
-                    {
-                     get statusCode()    { return response.statusCode; },
-                     set statusCode(sc)  { response.statusCode=sc; },
-
-                     get contentType()   { return response.getHeader("Content-Type"); },
-                     set contentType(ct) { response.setHeader("Content-Type",ct); },
-
-                     echo: function(){ $echo(request,response,arguments); },
-                    },
-                  
-                  db:
-                    {
-                     get objects()   { return Godb.objects;   },
-                     get relations() { return Godb.relations; },
-                     fx:
-                       {
-                        searchRow:         Godb.searchRow,
-                        insertRow:         Godb.insertRow,
-                        updateRow:         Godb.updateRow,
-                        updateOrInsertRow: Godb.updateOrInsertRow,
-                        retrieveRow:       Godb.retrieveRow,
-                        retrieveRows:      Godb.retrieveRows,
-                        retrieveIDs:       Godb.retrieveIDs,
-                       },
-                    }
-                 };
-
-             response.setHeader("Date",(new Date()).toUTCString());
-             response.setHeader("Content-Type",contentType(filename));
-             response.setHeader("Last-Modified",(new Date()).toUTCString());
-             response.statusCode=200;
-             Vm.runInNewContext(code,sandbox,filename);
-            }
-          else
-            {
-             var stat=Fs.statSync(filename);
-             response.setHeader("Date",(new Date()).toUTCString());
-             response.setHeader("Content-Type",contentType(filename));
-             response.setHeader("Content-Length",stat.size);
-             response.setHeader("Last-Modified",stat.mtime.toUTCString());
-             response.writeHead(200);
-             response.write(Fs.readFileSync(filename));
-            }
-         }
-       else
-       throw new HttpError(503/*Service Unavailable*/);
-      }
-    else
-    throw new Error("Wrong conf::http.site.root");
-   }
- catch(err)
-   {
-    if(err instanceof HttpError)
-      {
-       log("["+err.name+"]: "+err.message+" ("+err.statusCode+")");
-       response.statusCode=err.statusCode;
-      }
-    else
-      {
-       log("["+err.name+"]: "+err.message);
-       response.statusCode=500;//Internal Server Error
-      }
-   }
- finally
-   {
-    response.end();
-   }
-}
-
-if(Tools.isset(conf.http) && Tools.isset(conf.http.bind))
-  {
-   var http=require('http').createServer(webRequest);
-   http.on('close',function(){ log("HTTP server closed"); });  
-   http.listen(conf.http.bind.port,conf.http.bind.address);
-   log("HTTP listen on port "+conf.http.bind.port);
-  }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

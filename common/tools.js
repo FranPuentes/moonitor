@@ -1,3 +1,8 @@
+/*****************************************************************************
+  (c) 2012, Francisco Puentes (fran@puentescalvo.com)
+
+  LICENSE: 'moonitor' license
+*****************************************************************************/
 var Fs  =require("fs");
 var Path=require("path");
 
@@ -10,7 +15,7 @@ function printUsageAndExit(code)
  log("         --conf <file>    takes <file> into account");
  process.exit(code);
 }
-   
+
 function existsOldInstance(lockfile)
 {   
  try
@@ -39,7 +44,8 @@ function killOldInstance(lockfile)
  return 0;
 }
 
-//Array: remove duplicates (works with integers and strings)
+// Array: remove duplicates (works with integers and strings) ////////////////
+//
 function listDedup(list)
 {
  var result = [];
@@ -49,7 +55,8 @@ function listDedup(list)
  return result;
 }
 
-///////////////////////////////////////////////////////////
+// intervals /////////////////////////////////////////////////////////////////
+//
 var intervals={};
 
 function removeAllIntervals()
@@ -97,30 +104,18 @@ function installInterval(key,repeat,times,callback/*...*/)
    }
 }
 
-/// exports ///////////////////////////////////////////////////////////////////////////////////////////////////
-
+// exports ///////////////////////////////////////////////////////////////////////////////////////////////////
+//
 module.exports=
   {
-   isset:function(v)
-     {
-      return ((typeof v)!=='undefined' && v!==null);
-     },
+   isset:      function(v)        { return ((typeof v)!=='undefined' && v!==null);                                  },
+   isnset:     function(v)        { return ((typeof v)==='undefined' || v===null);                                  },
+   isfile:     function(filename) { try { return Fs.statSync(filename).isFile(); } catch(err) { return null; }      },   
+   isdirectory:function(filename) { try { return Fs.statSync(filename).isDirectory(); } catch(err) { return null; } },
+   isspace:    function(chr)      { return (chr==' ' || chr=='\n' || chr=='\r' || chr=='\t');                       },
+   isdigit:    function(chr)      { return (chr>='0' && chr<='9');                                                  },
+   isalpha:    function(chr)      { return ((chr>='a' && chr<='z') || (chr>='A' && chr<='Z'));                      },
 
-   isnset:function(v)
-     {
-      return ((typeof v)==='undefined' || v===null);
-     },
-
-   isfile:function(filename) 
-     { 
-      try { return Fs.statSync(filename).isFile(); } catch(err) { return null; }
-     },
-   
-   isdirectory:function(filename) 
-     { 
-      try { return Fs.statSync(filename).isDirectory(); } catch(err) { return null; }
-     },
-    
    log:function(logfile)
      {
       if((typeof logfile)==='string')
@@ -152,8 +147,4 @@ module.exports=
    removeAllIntervals:removeAllIntervals,
    removeInterval:    removeInterval,
    installInterval:   installInterval,
-   
   }
-  
-  
-  

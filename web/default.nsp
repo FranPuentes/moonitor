@@ -3,7 +3,7 @@
  <head>
    <meta charset='utf-8'/>
    <title>Moonitor 4 Linux</title>
-   
+
    <!-- **** JQUERY *********************************************** -->
    <script type="text/javascript" src="jquery.js"></script>
    <script type="text/javascript" src="jquery.cookie.js"></script>
@@ -189,7 +189,7 @@
             echo("</div>\n");
             ?>
               <script>
-               $(<? echo("'#tree_"+type+"'"); ?>).dynatree ({
+               $({{:"'#tree_"+type+"'"}}).dynatree ({
                  minExpandLevel: 1,
                  fx: { height: "toggle", duration: 200 },
                  //autoCollapse: true,
@@ -260,6 +260,28 @@
          echo("</div>");
          echo("</p>");
         }
-    ?> 
+      /*
+          {{:"<hr/>"}}
+          {{:"<p><b>request.method</b> "+Util.inspect(request.method)+"</p>"}}
+          {{:"<p><b>request.version</b> "+Util.inspect(request.version)+"</p>"}}
+          {{:"<p><b>request.href</b> "+Util.inspect(request.href)+"</p>"}}
+          {{:"<p><b>request.protocol</b> "+Util.inspect(request.protocol)+"</p>"}}
+          {{:"<p><b>request.auth</b> "+Util.inspect(request.auth)+"</p>"}}
+          {{:"<p><b>request.hostname</b> "+Util.inspect(request.hostname)+"</p>"}}
+          {{:"<p><b>request.port</b> "+Util.inspect(request.port)+"</p>"}}
+          {{:"<p><b>request.pathname</b> "+Util.inspect(request.pathname)+"</p>"}}
+          {{:"<p><b>request.search</b> "+Util.inspect(request.search)+"</p>"}}
+          {{:"<p><b>request.hash</b> "+Util.inspect(request.hash)+"</p>"}}
+          {{:"<p><b>request.headers</b> "+Util.inspect(request.headers)+"</p>"}}
+          {{:"<p><b>request.trailers</b> "+Util.inspect(request.trailers)+"</p>"}}
+          {{:"<hr/>"}}
+          {{:"<p><b>script.href</b> "+Util.inspect(script.href)+"</p>"}}
+          {{:"<p><b>script.filename</b> "+Util.inspect(script.filename)+"</p>"}}
+          {{:"<p><b>script.pathname</b> "+Util.inspect(script.pathname)+"</p>"}}
+          {{:"<p><b>script.leftover</b> "+Util.inspect(script.leftover)+"</p>"}}
+          {{:"<p><b>script.hash</b> "+Util.inspect(script.hash)+"</p>"}}
+          {{:"<p><b>script.query</b> "+Util.inspect(script.query)+"</p>"}}
+      */
+    ?>
  </body>
 </html>
