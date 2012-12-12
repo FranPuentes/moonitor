@@ -111,6 +111,38 @@ module.exports=
       return ((typeof v)==='undefined' || v===null);
      },
 
+   isfile:function(filename) 
+     { 
+      try { return Fs.statSync(filename).isFile(); } catch(err) { return null; }
+     },
+   
+   isdirectory:function(filename) 
+     { 
+      try { return Fs.statSync(filename).isDirectory(); } catch(err) { return null; }
+     },
+    
+   log:function(logfile)
+     {
+      if((typeof logfile)==='string')
+      try
+        {
+         var text="";
+         var tmsp=new Date().toUTCString();
+         for(var i=1; i<arguments.length; i++)
+            {
+             var arg=arguments[i];
+             if((typeof arg)==='string')
+               {
+                text+=tmsp+": "+arg+"\n";
+               }
+            }
+         Fs.appendFileSync(logfile,text,'utf8');
+        }
+      catch(err)
+        {
+        }
+     },  
+
    printUsageAndExit: printUsageAndExit,
    existsOldInstance: existsOldInstance,
    killOldInstance:   killOldInstance,

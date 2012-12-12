@@ -1,7 +1,7 @@
 
 pull:
 	git pull
-	(cd deps/daemon.node-master && node-waf clean configure build)
+	(cd deps/daemon.node-master && node-waf clean && node-waf configure build)
 
 clean:
 	find . -name \*~ -delete
