@@ -256,7 +256,7 @@ function $echo(sandbox,args)
 
 // whirler ///////////////////////////////////////////////////////////////////
 //
-function whirler(code, source, target)
+function whirler(code, source)
 {
  function normalizeString(str)
    {
@@ -670,26 +670,38 @@ var Handler=function(request,response,conf)
 
           var code;
           var hashname;
+          var newest;
+          var stat=Fs.statSync(req[0]);
+          
           if(Tools.isset(conf.cache))
             {
              hashname=Path.join(conf.cache,Crypto.createHash('sha1').update(req[0]).digest('hex'));
+             
+             if(Tools.isfile(hashname)===true)
+               {
+                if(stat.mtime.getTime() < Fs.statSync(hashname).mtime.getTime())
+                  {
+                   newest=true;
+                  }
+               }
             }
             
-          if(Tools.isset(conf.cache) /* TODO y existe 'hashname' y es más nueva la cache que req[0] */)
+          if(Tools.isset(conf.cache) && newest===true)
             {
              code=Fs.readFileSync(hashname,'utf8');
             }
           else
             {
-             code=whirler(Fs.readFileSync(req[0],'utf8'),req[0],null);
+             code=whirler(Fs.readFileSync(req[0],'utf8'),req[0]);
              if(Tools.isset(conf.cache))
                {
-                Fs.writeFile(hashname,code,
+                Fs.writeFile(hashname,
+                             code,
                              'utf8',
                              function()
                                {
-                                //TODO: Path.relative(from,to) ...
-                                Fs.symlink(req[0],hashname,"file");
+                                log("---------> "+Path.relative(req[0],hashname));
+                                //Fs.symlink(req[0],hashname,"file");
                                });
                }
             }
