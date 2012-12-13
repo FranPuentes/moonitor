@@ -338,7 +338,7 @@ function whirler(code, source)
                     if((i+1)<code.length) $send(',');
                    }
                 $send("]);"+cr);
-                //$send(" // "+normalizeString(code).trim()+"\n")
+                //$send(" // "+normalizeString(code).trim()+cr);
                }
             }
          }
@@ -477,14 +477,19 @@ function whirler(code, source)
 /*********************************************************************
   conf
   .logfile      logfile or null (no log)
-  .root		       site root
+  .root         site root
   .sessions     sessions folder
   .cache        cache folder
-  .defaults	    page defaults
+  .defaults     page defaults
   .arena        objects to append to sandbox's arena
   .protocol     http or https
   .scookie      cookie key for sessions
 *********************************************************************/
+//TODO: almacenar las sesiones en memoria durante un tiempo
+//      pasado dicho tiempo volcarlas al disco
+//      podríamos tener cabida para X sesiones en memoria (configurable)
+//      si querems almacenar en memoria otra sesión mas y no hay espacio
+//      volcamos la sesión más antigua al disco
 var Handler=function(request,response,conf)
 {
  function log(text)
@@ -502,6 +507,7 @@ var Handler=function(request,response,conf)
        //fullname
        //reltname
        //restname
+       //sessname
        //moonid
        arena:
          {
@@ -576,6 +582,7 @@ var Handler=function(request,response,conf)
              get leftover() { return myself.sandbox.restname;     },
              get hash()     { return myself.sandbox.url.hash;     },
              get query()    { return myself.sandbox.url.query;    },
+             //TODO: input stream
             },
 
           session:
@@ -584,32 +591,34 @@ var Handler=function(request,response,conf)
              
              open: function()
                {
-                if(Tools.isset(conf.scookie))
+                if(Tools.isset(conf.scookie) && Tools.isset(conf.sessions))
                   {
-                   var shasum=Crypto.createHash('sha1');
-                   var seed=Math.round(Math.random()*(1000001-100)+100)+"::MOON-ID::"+new Date().getTime();
-                   shasum.update(seed);
-                   myself.sandbox.moonid=shasum.digest('hex');
-                   //TODO: create session file
-                   return setSessionCookie(response,conf.scookie,myself.sandbox.moonid,{});
+                   if(!Tools.isset(myself.sandbox.moonid))
+                     {
+                      var seed=Math.round(Math.random()*(1000001-100)+100)+"::MOON-ID::"+new Date().getTime();
+                      myself.sandbox.moonid=Crypto.createHash('sha1').update(seed).digest('hex');
+                      myself.sandbox.arena.session.data={};
+                      myself.sandbox.sessname=Path.join(conf.sessions,myself.sandbox.moonid+".session");
+                      return setSessionCookie(response,conf.scookie,myself.sandbox.moonid,{});
+                     }
+                   return true;  
                   }
                },
                
              close: function()
                {
-                if(Tools.isset(conf.scookie))
+                if(Tools.isfile(myself.sandbox.sessname))
                   {
                    setSessionCookie(response,conf.scookie,null,{});
-                   //TODO: remove session file
-                   myself.sandbox.moonid=false;
+                   Fs.unlinkSync(myself.sandbox.sessname);
+                   delete myself.sandbox.arena.session.data;
+                   delete myself.sandbox.moonid;
+                   delete myself.sandbox.sessname;
                    return true;
                   }
                },
                
-             data:
-               {
-                //user data ...
-               },
+             data:undef,
             },
 
           response:
@@ -627,6 +636,8 @@ var Handler=function(request,response,conf)
              trailers: function(headers) { response.addTrailers(headers); },
                
              echo: function(){ return $echo(myself.sandbox,arguments); },
+             
+             error: function(code) { throw new HttpError(code); },
             },
          }
       };
@@ -652,22 +663,6 @@ var Handler=function(request,response,conf)
       {
        if(Path.extname(req[0])==='.nsp' || Path.extname(req[0])==='.njs')
          {
-          this.sandbox.url=url;
-          this.sandbox.fullname=req[0];
-          this.sandbox.reltname=req[1];
-          this.sandbox.restname=req[2];
-
-          this.sandbox.moonid=false;
-          if(Tools.isset(conf.scookie))
-            {
-             var sid=propagateSessionCookie(request,response,conf.scookie);
-             if((typeof sid)==='string')
-               {
-                this.sandbox.moonid=sid;
-                //TODO: load session file
-               }
-            }
-
           var code;
           var hashbase;
           var hashname;
@@ -675,8 +670,30 @@ var Handler=function(request,response,conf)
           var newest;
           var stat=Fs.statSync(req[0]);
           
-          var hrti=process.hrtime();
+          this.sandbox.url=url;
+          this.sandbox.fullname=req[0];
+          this.sandbox.reltname=req[1];
+          this.sandbox.restname=req[2];
+          this.sandbox.moonid=undefined;
+          this.sandbox.sessname=undefined;
           
+          if(Tools.isset(conf.scookie))
+            {
+             var sid=propagateSessionCookie(request,response,conf.scookie);
+             if((typeof sid)==='string')
+               {
+                this.sandbox.moonid=sid;
+                if(Tools.isdirectory(conf.sessions))
+                  {
+                   this.sandbox.sessname=Path.join(conf.sessions,sid+".session");
+                   if(Tools.isfile(this.sandbox.sessname))
+                     {
+                      this.sandbox.arena.session.data=JSON.parse(Fs.readFileSync(this.sandbox.sessname,'utf8'));
+                     }
+                  }
+               }
+            }
+
           if(Tools.isset(conf.cache))
             {
              hashbase=Path.join(conf.cache,Crypto.createHash('sha1').update(req[0]).digest('hex'));
@@ -701,36 +718,36 @@ var Handler=function(request,response,conf)
              code=whirler(Fs.readFileSync(req[0],'utf8'),req[0]);
              if(Tools.isset(conf.cache))
                {
-                Fs.writeFile(hashname,
-                             code,
-                             'utf8',
-                             function()
-                               {
-                                Fs.symlink(req[0],hashlink,"file");
-                               });
+                Fs.writeFile(hashname, code, 'utf8', function() { Fs.symlink(req[0],hashlink,"file"); });
                }
             }
 
-          var diff=process.hrtime(hrti);
-          
-          log("DIFF: it took "+diff[0]+" secs and "+diff[1]+" nsecs");
-          
           var date=new Date();
           response.setHeader("Date",date.toUTCString());
           response.setHeader("Content-Type",contentType(req[0]));
           response.setHeader("Last-Modified",date.toUTCString());
           response.statusCode=200;
           Vm.runInNewContext(code,this.sandbox.arena,req[0]);
+          
+          if(Tools.isset(this.sandbox.sessname))
+            {
+             Fs.writeFileSync(this.sandbox.sessname,JSON.stringify(this.sandbox.arena.session.data),'utf8');
+            }
          }
        else
          {
-          var stat=Fs.statSync(req[0]);
-          response.setHeader("Date",new Date().toUTCString());
-          response.setHeader("Content-Type",contentType(req[0]));
-          response.setHeader("Content-Length",stat.size);
-          response.setHeader("Last-Modified",stat.mtime.toUTCString());
-          response.writeHead(200);
-          response.write(Fs.readFileSync(req[0]));
+          if(request.method==='GET')
+            {
+             var stat=Fs.statSync(req[0]);
+             response.setHeader("Date",new Date().toUTCString());
+             response.setHeader("Content-Type",contentType(req[0]));
+             response.setHeader("Content-Length",stat.size);
+             response.setHeader("Last-Modified",stat.mtime.toUTCString());
+             response.writeHead(200);
+             response.write(Fs.readFileSync(req[0]));
+            }
+          else
+          throw new HttpError(405);
          }
       }
     else
