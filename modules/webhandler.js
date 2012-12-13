@@ -669,13 +669,17 @@ var Handler=function(request,response,conf)
             }
 
           var code;
+          var hashbase;
           var hashname;
+          var hashlink;
           var newest;
           var stat=Fs.statSync(req[0]);
           
           if(Tools.isset(conf.cache))
             {
-             hashname=Path.join(conf.cache,Crypto.createHash('sha1').update(req[0]).digest('hex'));
+             hashbase=Path.join(conf.cache,Crypto.createHash('sha1').update(req[0]).digest('hex'));
+             hashname=hashbase+".code";
+             hashlink=hashbase+".link";
              
              if(Tools.isfile(hashname)===true)
                {
@@ -702,8 +706,8 @@ var Handler=function(request,response,conf)
                                {
                                 log("---------> "+req[0]);
                                 log("---------> "+hashname);
-                                log("---------> "+Path.relative(req[0],hashname));
-                                //Fs.symlink(req[0],hashname,"file");
+                                log("---------> "+Path.relative(hashname,req[0]));
+                                //Fs.symlink(req[0],hashlink,"file");
                                });
                }
             }
