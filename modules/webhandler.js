@@ -713,7 +713,7 @@ var Handler=function(request,response,conf)
 
           var diff=process.hrtime(hrti);
           
-          log("DIFF: it took %d secs and %d nsecs",diff[0],diff[1]);
+          log("DIFF: it took "+diff[0]+" secs and "+diff[1]+" nsecs");
           
           var date=new Date();
           response.setHeader("Date",date.toUTCString());
