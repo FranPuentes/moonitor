@@ -704,15 +704,11 @@ var Handler=function(request,response,conf)
                              'utf8',
                              function()
                                {
-                                log("---------> "+req[0]);
-                                log("---------> "+hashname);
-                                log("---------> "+Path.relative(hashname,req[0]));
-                                //Fs.symlink(req[0],hashlink,"file");
+                                Fs.symlink(req[0],hashlink,"file");
                                });
                }
             }
 
-          
           var date=new Date();
           response.setHeader("Date",date.toUTCString());
           response.setHeader("Content-Type",contentType(req[0]));
