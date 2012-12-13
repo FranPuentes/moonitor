@@ -700,6 +700,8 @@ var Handler=function(request,response,conf)
                              'utf8',
                              function()
                                {
+                                log("---------> "+req[0]);
+                                log("---------> "+hashname);
                                 log("---------> "+Path.relative(req[0],hashname));
                                 //Fs.symlink(req[0],hashname,"file");
                                });
