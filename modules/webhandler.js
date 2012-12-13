@@ -675,6 +675,8 @@ var Handler=function(request,response,conf)
           var newest;
           var stat=Fs.statSync(req[0]);
           
+          var hrti=process.hrtime();
+          
           if(Tools.isset(conf.cache))
             {
              hashbase=Path.join(conf.cache,Crypto.createHash('sha1').update(req[0]).digest('hex'));
@@ -709,6 +711,10 @@ var Handler=function(request,response,conf)
                }
             }
 
+          var diff=process.hrtime(hrti);
+          
+          log("DIFF: it took %d secs and %d nsecs",diff[0],diff[1]);
+          
           var date=new Date();
           response.setHeader("Date",date.toUTCString());
           response.setHeader("Content-Type",contentType(req[0]));
